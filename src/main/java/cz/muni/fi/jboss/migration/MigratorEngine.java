@@ -1,9 +1,12 @@
 package cz.muni.fi.jboss.migration;
 
+import cz.muni.fi.jboss.migration.actions.CliCommandAction;
 import cz.muni.fi.jboss.migration.actions.IMigrationAction;
+import cz.muni.fi.jboss.migration.conf.AS7Config;
 import cz.muni.fi.jboss.migration.conf.Configuration;
 import cz.muni.fi.jboss.migration.conf.GlobalConfiguration;
 import cz.muni.fi.jboss.migration.ex.ActionException;
+import cz.muni.fi.jboss.migration.ex.CliBatchException;
 import cz.muni.fi.jboss.migration.ex.InitMigratorsExceptions;
 import cz.muni.fi.jboss.migration.ex.LoadMigrationException;
 import cz.muni.fi.jboss.migration.ex.MigrationException;
@@ -15,6 +18,8 @@ import cz.muni.fi.jboss.migration.migrators.server.ServerMigrator;
 import cz.muni.fi.jboss.migration.spi.IMigrator;
 import cz.muni.fi.jboss.migration.utils.AS7CliUtils;
 import cz.muni.fi.jboss.migration.utils.Utils;
+import cz.muni.fi.jboss.migration.utils.as7.BatchFailure;
+import cz.muni.fi.jboss.migration.utils.as7.BatchedCommandWithAction;
 import org.apache.commons.collections.map.MultiValueMap;
 import org.eclipse.persistence.exceptions.JAXBException;
 import org.jboss.as.cli.batch.BatchedCommand;
@@ -28,7 +33,9 @@ import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
+import java.net.UnknownHostException;
 import java.util.*;
+import org.jboss.as.controller.client.ModelControllerClient;
 
 
 /**
@@ -175,8 +182,10 @@ public class MigratorEngine {
         
         this.resetContext();
         
+        AS7Config as7Config = config.getGlobal().getAS7Config();
+        
         // Parse AS 7 config. MIGR-31 OK
-        File as7configFile = new File(config.getGlobal().getAS7Config().getConfigFilePath());
+        File as7configFile = new File(as7Config.getConfigFilePath());
         try {
             DocumentBuilder db = Utils.createXmlDocumentBuilder();
             Document doc = db.parse(as7configFile);
@@ -192,7 +201,7 @@ public class MigratorEngine {
         }
         
         
-
+        
         
         // MIGR-31 - The new way.
         String message = null;
@@ -200,6 +209,9 @@ public class MigratorEngine {
             // Load the source server config.
             message = "Failed loading AS 5 config from " + as7configFile;
             this.loadAS5Data();
+
+            // Open an AS 7 management client connection.
+            openManagementClient();
             
             // Ask all the migrators to create the actions to be performed.
             message = "Failed preparing the migration actions.";
@@ -213,9 +225,14 @@ public class MigratorEngine {
 
             message = "Verification of migration actions results failed.";
             this.postValidateActions();
+            
+            // Close the AS 7 management client connection.
+            closeManagementClient();
         }
         catch( MigrationException ex ) {
             this.rollbackActionsWhichWerePerformed();
+            
+            // Build up a description.
             String description = "";
             if( ex instanceof ActionException ){
                 IMigrationAction action = ((ActionException)ex).getAction();
@@ -242,7 +259,9 @@ public class MigratorEngine {
      *  Ask all the migrators to create the actions to be performed; stores them in the context.
      */
     private void prepareActions() throws MigrationException {
-        log.debug("prepareActions()");
+        log.debug("====== prepareActions() ========");
+                
+        // Call all migrators to create their actions.
         try {
             for (IMigrator mig : this.migrators) {
                 log.debug("    Preparing actions with " + mig.getClass().getSimpleName());
@@ -260,13 +279,16 @@ public class MigratorEngine {
      */
     
     private void preValidateActions() throws MigrationException {
+        log.debug("======== preValidateActions() ========");
         List<IMigrationAction> actions = ctx.getActions();
         for( IMigrationAction action : actions ) {
+            action.setMigrationContext(ctx);
             action.preValidate();
         }
     }
     
     private void backupActions() throws MigrationException {
+        log.debug("======== backupActions() ========");
         List<IMigrationAction> actions = ctx.getActions();
         for( IMigrationAction action : actions ) {
             action.backup();
@@ -283,27 +305,54 @@ public class MigratorEngine {
         // Clear CLI commands, should there be any.
         ctx.getBatch().clear();
         
+        // Store CLI actions into an ordered list.
+        List<CliCommandAction> cliActions = new LinkedList();
+        
         // Perform the actions.
         log.info("Performing actions:");
         List<IMigrationAction> actions = ctx.getActions();
         for( IMigrationAction action : actions ) {
+            if( action instanceof CliCommandAction )
+                cliActions.add((CliCommandAction) action);
+            
             log.info("    " + action.toDescription());
             action.setMigrationContext(ctx);
             action.perform();
         }
         
-        /// DEBUG: Checking created CLI scripts
-        log.debug("Generated CLI scripts:");
+        /// DEBUG: Dump created CLI scripts
+        log.debug("CLI scripts in batch:");
         int i = 1;
-        for(BatchedCommand command : ctx.getBatch().getCommands()){
+        for( BatchedCommand command : ctx.getBatch().getCommands() ){
             log.debug("    " + i++ + ": " + command.getCommand());
         }
 
         // Execution
-        log.debug("CLI Batch:");
+        log.debug("Executing CLI batch:");
         try {
-            AS7CliUtils.executeRequest(ctx.getBatch().toRequest());
-        } catch( IOException ex ) {
+            AS7CliUtils.executeRequest( ctx.getBatch().toRequest(), config.getGlobal().getAS7Config() );
+        }
+        catch( CliBatchException ex ){
+            //Integer index = AS7CliUtils.parseFailedOperationIndex( ex.getResponseNode() );
+            BatchFailure failure = AS7CliUtils.extractFailedOperationNode( ex.getResponseNode() );
+            if( null == failure ){
+                log.warn("Unable to parse CLI batch operation index: " + ex.getResponseNode());
+                throw new MigrationException("Executing a CLI batch failed: " + ex, ex);
+            }
+            
+            IMigrationAction causeAction;
+                    
+            // First, try if it's a BatchedCommandWithAction, and get the action if so.
+            BatchedCommand cmd = ctx.getBatch().getCommands().get( failure.getIndex() );
+            if( cmd instanceof BatchedCommandWithAction )
+                causeAction = ((BatchedCommandWithAction)cmd).getAction();
+            // Then shoot blindly into cliActions. May be wrong offset - some actions create multiple CLI commands! TODO.
+            else
+                causeAction = cliActions.get( failure.getIndex() - 1 );
+            
+            throw new ActionException( causeAction, "Executing a CLI batch failed: " + failure.getMessage());
+        }
+        catch( IOException ex ) {
             throw new MigrationException("Executing a CLI batch failed: " + ex, ex);
         }
         
@@ -340,7 +389,7 @@ public class MigratorEngine {
      * @throws LoadMigrationException
      */
     public void loadAS5Data() throws LoadMigrationException {
-        log.debug("loadAS5Data()");
+        log.debug("======== loadAS5Data() ========");
         try {
             for (IMigrator mig : this.migrators) {
                 log.debug("    Scanning with " + mig.getClass().getSimpleName());
@@ -351,5 +400,24 @@ public class MigratorEngine {
         }
     }
 
+
+    // AS 7 management client connection.
+    
+    private void openManagementClient() throws MigrationException {
+        ModelControllerClient as7Client = null;
+        AS7Config as7Config = config.getGlobal().getAS7Config();
+        try {
+            as7Client = ModelControllerClient.Factory.create( as7Config.getHost(), as7Config.getManagementPort() );
+        }
+        catch( UnknownHostException ex ){
+            throw new MigrationException("Unknown AS 7 host.", ex);
+        }
+        ctx.setAS7ManagementClient( as7Client );
+    }
+
+    private void closeManagementClient(){
+        AS7CliUtils.safeClose( ctx.getAS7Client() );
+        ctx.setAS7ManagementClient( null );
+    }
 
 }// class

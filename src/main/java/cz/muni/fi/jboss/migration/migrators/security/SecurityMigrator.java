@@ -3,6 +3,7 @@ package cz.muni.fi.jboss.migration.migrators.security;
 import cz.muni.fi.jboss.migration.*;
 import cz.muni.fi.jboss.migration.actions.CliCommandAction;
 import cz.muni.fi.jboss.migration.actions.CopyFileAction;
+import cz.muni.fi.jboss.migration.conf.Configuration;
 import cz.muni.fi.jboss.migration.conf.GlobalConfiguration;
 import cz.muni.fi.jboss.migration.ex.CliScriptException;
 import cz.muni.fi.jboss.migration.ex.CopyException;
@@ -10,6 +11,7 @@ import cz.muni.fi.jboss.migration.ex.LoadMigrationException;
 import cz.muni.fi.jboss.migration.ex.MigrationException;
 import cz.muni.fi.jboss.migration.migrators.security.jaxb.*;
 import cz.muni.fi.jboss.migration.spi.IConfigFragment;
+import cz.muni.fi.jboss.migration.utils.AS7CliUtils;
 import cz.muni.fi.jboss.migration.utils.Utils;
 import org.apache.commons.collections.map.MultiValueMap;
 import org.apache.commons.lang.StringUtils;
@@ -20,9 +22,9 @@ import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Unmarshaller;
 import java.io.File;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import org.slf4j.Logger;
@@ -47,11 +49,26 @@ public class SecurityMigrator extends AbstractMigrator {
     private static final Logger log = LoggerFactory.getLogger(SecurityMigrator.class);
 
     private static final String AS7_CONFIG_DIR_PLACEHOLDER = "${jboss.server.config.dir}";
+    
+    
+    // Configurables
+    private Configuration.IfExists ifExists = Configuration.IfExists.WARN;
+
+
+    @Override
+    public int examineConfigProperty( Configuration.ModuleSpecificProperty prop ) {
+        if( ! getConfigPropertyModuleName().equals( prop.getModuleId() ) ) return 0;
+        if( ! "ifExists".equals( prop.getPropName() ) ) return 0;
+        this.ifExists = Configuration.IfExists.valueOf_Custom(prop.getPropName());
+        return 1;
+    }
+    
+    
 
     
     // Files which must be copied into AS7
     private Set<String> fileNames = new HashSet();
-    private Set<CopyFileAction> copyActions;
+    private Set<CopyFileAction> copyActions; // not used, TODO
 
 
     @Override
@@ -125,10 +142,9 @@ public class SecurityMigrator extends AbstractMigrator {
                 continue;
             }
 
-            File target = Utils.createPath(as7Dir, "standalone", "configuration", src.getName());
-
-            // Default value for overwrite => false
-            ctx.getActions().add( new CopyFileAction( this.getClass(), src, target, false));
+            File target = Utils.createPath(as7Dir, "standalone", "configuration", src.getName()); // TODO: getConfigDir();
+            CopyFileAction act = new CopyFileAction( this.getClass(), src, target, CopyFileAction.IfExists.WARN );
+            ctx.getActions().add( act );
         }
 
     }
@@ -244,19 +260,22 @@ public class SecurityMigrator extends AbstractMigrator {
      * @throws CliScriptException if required attributes for a creation of the CLI command of the Security-Domain
      *                            are missing or are empty (security-domain-name)
      */
-    public static List<CliCommandAction> createSecurityDomainCliAction(SecurityDomainBean domain)
+    public List<CliCommandAction> createSecurityDomainCliAction(SecurityDomainBean domain)
             throws CliScriptException {
         String errMsg = " in security-domain must be set.";
         Utils.throwIfBlank(domain.getSecurityDomainName(), errMsg, "Security name");
 
-        List<CliCommandAction> actions = new ArrayList();
-
+        List<CliCommandAction> actions = new LinkedList();
+        
+        // CLI ADD command
         ModelNode domainCmd = new ModelNode();
         domainCmd.get(ClientConstants.OP).set(ClientConstants.ADD);
         domainCmd.get(ClientConstants.OP_ADDR).add("subsystem", "security");
         domainCmd.get(ClientConstants.OP_ADDR).add("security-domain", domain.getSecurityDomainName());
-
-        actions.add( new CliCommandAction( SecurityMigrator.class, createSecurityDomainScript(domain), domainCmd));
+        // Action
+        CliCommandAction action = new CliCommandAction( SecurityMigrator.class, createSecurityDomainScript(domain), domainCmd);
+        action.setIfExists( this.ifExists );
+        actions.add( action );
 
         if (domain.getLoginModules() != null) {
             for (LoginModuleAS7Bean module : domain.getLoginModules()) {
@@ -333,6 +352,8 @@ public class SecurityMigrator extends AbstractMigrator {
      * @param domain Security-Domain containing Login-Module
      * @param module Login-Module
      * @return created string containing the CLI script for adding the Login-Module
+     * 
+     * TODO: Rewrite using ModuleNode.
      */
     private static String createLoginModuleScript(SecurityDomainBean domain, LoginModuleAS7Bean module) {
         StringBuilder resultScript = new StringBuilder("/subsystem=security/security-domain=" +

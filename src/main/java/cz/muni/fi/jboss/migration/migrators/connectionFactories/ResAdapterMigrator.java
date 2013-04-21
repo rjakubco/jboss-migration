@@ -78,7 +78,7 @@ public class ResAdapterMigrator extends AbstractMigrator {
 
             // For each -ds.xml
             for (File dsXml : dsXmls) {
-                Document doc = Utils.parseXmlToDoc(dsXml);
+                Document doc = Utils.parseFileToXmlDoc(dsXml);
 
                 Element element = doc.getDocumentElement();
                 if ("connection-factories".equals(element.getTagName())) {
@@ -282,7 +282,7 @@ public class ResAdapterMigrator extends AbstractMigrator {
         String errMsg = " in resource-adapter(connection-factories in AS5) must be set.";
         Utils.throwIfBlank(adapter.getArchive(), errMsg, "Archive name");
 
-        List<CliCommandAction> actions = new ArrayList();
+        List<CliCommandAction> actions = new LinkedList();
 
         ModelNode adapterCmd = new ModelNode();
         adapterCmd.get(ClientConstants.OP).set(ClientConstants.ADD);
@@ -322,7 +322,7 @@ public class ResAdapterMigrator extends AbstractMigrator {
         Utils.throwIfBlank(def.getClassName(), errMsg, "Class-name");
         Utils.throwIfBlank(def.getPoolName(), errMsg, "Pool-name");
 
-        List<CliCommandAction> actions = new ArrayList();
+        List<CliCommandAction> actions = new LinkedList();
 
         ModelNode connDefCmd = new ModelNode();
         connDefCmd.get(ClientConstants.OP).set(ClientConstants.ADD);

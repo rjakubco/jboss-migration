@@ -4,6 +4,7 @@ import cz.muni.fi.jboss.migration.*;
 import cz.muni.fi.jboss.migration.actions.CliCommandAction;
 import cz.muni.fi.jboss.migration.actions.IMigrationAction;
 import cz.muni.fi.jboss.migration.actions.ModuleCreationAction;
+import cz.muni.fi.jboss.migration.conf.Configuration;
 import cz.muni.fi.jboss.migration.conf.GlobalConfiguration;
 import cz.muni.fi.jboss.migration.ex.CliBatchException;
 import cz.muni.fi.jboss.migration.ex.CliScriptException;
@@ -28,7 +29,6 @@ import javax.xml.stream.XMLStreamException;
 import javax.xml.stream.XMLStreamReader;
 import javax.xml.transform.stream.StreamSource;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.*;
 
@@ -39,14 +39,34 @@ import java.util.*;
  */
 public class LoggingMigrator extends AbstractMigrator {
     
-    private final static String CLI_PROP__LOG_DIR = "jboss.server.log.dir";
-    
+    private final static String CLI_PROP__LOG_DIR      = "jboss.server.log.dir";
+    private final static String AS5_PROP__LOG_TRESHOLD = "jboss.server.log.threshold";
 
+    
+    // Configurables
+    @Override protected String getConfigPropertyModuleName() { return "logging"; }
+    
+    private String rootLoggerTreshold = "INFO";
+    private String getRootLoggerTreshold() { return rootLoggerTreshold; }
+
+    @Override
+    public int examineConfigProperty( Configuration.ModuleSpecificProperty prop ) {
+        if( ! getConfigPropertyModuleName().equals(  prop.getModuleId() )) return 0;
+        switch( prop.getPropName() ){
+            case "rootLoggerTreshold":
+            case AS5_PROP__LOG_TRESHOLD:
+                this.rootLoggerTreshold = prop.getValue();
+                return 1;
+        }
+        return 0;
+    }
+    
+    
     // Sequence number for driver names.
     // TODO: Perhaps move this property to migration context.
     private int number = 1;
     
-    @Override protected String getConfigPropertyModuleName() { return "logging"; }
+    
     
 
     public LoggingMigrator(GlobalConfiguration globalConfig, MultiValueMap config) {
@@ -56,7 +76,6 @@ public class LoggingMigrator extends AbstractMigrator {
     @Override
     public void loadAS5Data(MigrationContext ctx) throws LoadMigrationException {
         try {
-            Unmarshaller unmarshaller = JAXBContext.newInstance(LoggingAS5Bean.class).createUnmarshaller();
             File log4jConfFile = Utils.createPath( 
                     super.getGlobalConfig().getAS5Config().getDir(),  "server",
                     super.getGlobalConfig().getAS5Config().getProfileName(),
@@ -66,14 +85,11 @@ public class LoggingMigrator extends AbstractMigrator {
             xif.setProperty(XMLInputFactory.SUPPORT_DTD, false);
             XMLStreamReader xsr = xif.createXMLStreamReader(new StreamSource(log4jConfFile));
 
-            LoggingAS5Bean loggingAS5;
-
-            if (log4jConfFile.canRead()) {
-                loggingAS5 = (LoggingAS5Bean) unmarshaller.unmarshal(xsr);
-            } else {
-                throw new LoadMigrationException("Cannot find/open file: " + log4jConfFile.getAbsolutePath(), new
-                        FileNotFoundException());
-            }
+            //if( ! log4jConfFile.canRead())
+            //    throw new LoadMigrationException("Cannot find/open file: " + log4jConfFile.getAbsolutePath());
+            
+            Unmarshaller unmarshaller = JAXBContext.newInstance(LoggingAS5Bean.class).createUnmarshaller();
+            LoggingAS5Bean loggingAS5 = (LoggingAS5Bean) unmarshaller.unmarshal(xsr);
 
             MigrationData mData = new MigrationData();
 
@@ -89,8 +105,8 @@ public class LoggingMigrator extends AbstractMigrator {
             mData.getConfigFragments().add(loggingAS5.getRootLoggerAS5());
 
             ctx.getMigrationData().put(LoggingMigrator.class, mData);
-
-        } catch (JAXBException | XMLStreamException e) {
+        }
+        catch (JAXBException | XMLStreamException e) {
             throw new LoadMigrationException(e);
         }
     }
@@ -100,7 +116,7 @@ public class LoggingMigrator extends AbstractMigrator {
     @Override
     public void createActions(MigrationContext ctx) throws MigrationException {
         
-        List<CustomHandlerBean> customHandlers = new ArrayList();
+        List<CustomHandlerBean> customHandlers = new LinkedList();
 
         for( IConfigFragment fragment : ctx.getMigrationData().get(LoggingMigrator.class).getConfigFragments() ){
             if (fragment instanceof AppenderBean) {
@@ -113,7 +129,8 @@ public class LoggingMigrator extends AbstractMigrator {
 
             if (fragment instanceof CategoryBean) {
                 try {
-                    ctx.getActions().add( createLoggerCliAction( ctx, migrateCategory((CategoryBean) fragment)));
+                    CliCommandAction action = createLoggerCliAction( ctx, migrateCategory((CategoryBean) fragment), this.getIfExists());
+                    ctx.getActions().add( action );
                 } catch (CliScriptException e) {
                     throw new MigrationException("Migration of the Category failed: " + e.getMessage(), e);
                 }
@@ -122,7 +139,7 @@ public class LoggingMigrator extends AbstractMigrator {
 
             if (fragment instanceof RootLoggerAS5Bean) {
                 RootLoggerAS5Bean root = (RootLoggerAS5Bean) fragment;
-                // For now empty => Find way to create CLI API command for root-logger
+                // TODO: Find way to create CLI API command for root-logger
                 continue;
             }
 
@@ -147,7 +164,7 @@ public class LoggingMigrator extends AbstractMigrator {
             throw new MigrationException("Failed finding jar with class " + handler.getClassValue() + ": " + ex.getMessage(), ex);
         }
 
-        List<IMigrationAction> actions = new ArrayList();
+        List<IMigrationAction> actions = new LinkedList();
 
         if (tempModules.containsKey(src)) {
             // It means that moduleAction is already set. No need for another one => create CLI for CustomHandler and
@@ -156,16 +173,15 @@ public class LoggingMigrator extends AbstractMigrator {
                 handler.setModule(tempModules.get(src));
                 actions.add(createCustomHandlerCliAction(handler));
             }
-            catch (CliScriptException e) {
-                throw new MigrationException("Migration of the appeneder " + handler.getName() +
-                        " failed (CLI command): " + e.getMessage(), e);
+            catch (CliScriptException ex) {
+                throw new MigrationException("Failed creating a CLI command for appeneder " + handler.getName() + ": " + ex.getMessage(), ex);
             }
 
             return actions;
         }
 
         
-        // Handler jar is new => create ModuleCreationAction, new module and CLI script for driver
+        // Handler jar is new => create ModuleCreationAction, new module and CLI script
         try {
             
             handler.setModule("logging.customHandler" + number);
@@ -202,8 +218,8 @@ public class LoggingMigrator extends AbstractMigrator {
     private CustomHandlerBean processAppenderBean( AppenderBean appenderBean, MigrationContext ctx ) throws MigrationException {
         
         // Selection of classes which are stored in log4j or jboss logging jars.
-        String type = appenderBean.getAppenderClass();
-        if( ! (type.contains("org.apache.log4j") || type.contains("org.jboss.logging.appender")) ){
+        String cls = appenderBean.getAppenderClass();
+        if( ! (cls.startsWith("org.apache.log4j") || cls.startsWith("org.jboss.logging.appender")) ){
             
             // Selection of classes which are created by the user
             // In situation that the user creates own class with same name as classes in log4j or jboss logging => CustomHandler
@@ -213,7 +229,7 @@ public class LoggingMigrator extends AbstractMigrator {
             
 
         try {
-            String appenderType = StringUtils.substringAfterLast(type, ".");
+            String appenderType = StringUtils.substringAfterLast(cls, ".");
             CliCommandAction action;
 
             switch( appenderType ) {
@@ -273,14 +289,11 @@ public class LoggingMigrator extends AbstractMigrator {
      * @param loggerAS5 object representing root-logger from AS5
      * @return created object of root-logger from AS7
      */
-    private static RootLoggerAS7Bean migrateRootLogger(RootLoggerAS5Bean loggerAS5){
+    private RootLoggerAS7Bean migrateRootLogger(RootLoggerAS5Bean loggerAS5){
         RootLoggerAS7Bean rootLoggerAS7 = new RootLoggerAS7Bean();
-        /*
-        TODO: Problem with level, because there is relative path in AS:<priority value="${jboss.server.log.threshold}"/>
-        for now only default INFO
-        */
-        if(loggerAS5.getRootPriorityValue().equals("${jboss.server.log.threshold}")) {
-            rootLoggerAS7.setRootLoggerLevel("INFO");
+        // Defined as reference to sys prop in AS 5: <priority value="${jboss.server.log.threshold}"/>
+        if(loggerAS5.getRootPriorityValue().equals("${" + AS5_PROP__LOG_TRESHOLD + "}")) {
+            rootLoggerAS7.setRootLoggerLevel( this.getRootLoggerTreshold() );
         } else{
             rootLoggerAS7.setRootLoggerLevel(loggerAS5.getRootPriorityValue());
         }
@@ -503,7 +516,7 @@ public class LoggingMigrator extends AbstractMigrator {
      * @throws CliScriptException if required attributes for a creation of the CLI command of the logger are missing or
      *                            are empty (loggerCategory)
      */
-    static CliCommandAction createLoggerCliAction( MigrationContext ctx, LoggerBean logger) throws CliScriptException {
+    static CliCommandAction createLoggerCliAction( MigrationContext ctx, LoggerBean logger, Configuration.IfExists ifExists) throws CliScriptException {
         String errMsg = " in logger(Category in AS5) must be set.";
         Utils.throwIfBlank(logger.getLoggerCategory(), errMsg, "Logger name");
 
@@ -512,13 +525,13 @@ public class LoggingMigrator extends AbstractMigrator {
         loggerCmd.get(ClientConstants.OP_ADDR).add("subsystem","logging");
         loggerCmd.get(ClientConstants.OP_ADDR).add("logger", logger.getLoggerCategory());
         
-        // TODO: First, check if it exists. If so, delete first.
+        // First, check if it exists. If so, delete first.
         // TODO: MIGR-61 Merge resources instead of skipping or replacing
-        try {
+        /*try {
             AS7CliUtils.removeResourceIfExists( loggerCmd, ctx.getAS7Client() );
         } catch( IOException | CliBatchException ex ) {
             throw new CliScriptException("Failed removing resource: " + ex.getMessage(), ex );
-        }
+        }*/
 
         
         // ADD
@@ -538,7 +551,8 @@ public class LoggingMigrator extends AbstractMigrator {
         builder.addProperty("level", logger.getLoggerLevelName());
         builder.addProperty("use-parent-handlers", logger.getUseParentHandlers());
 
-        return new CliCommandAction( LoggingMigrator.class, createLoggerScript(logger), builder.getCommand());
+        return new CliCommandAction( LoggingMigrator.class, createLoggerScript(logger), builder.getCommand())
+                .setIfExists( ifExists );
     }
 
     

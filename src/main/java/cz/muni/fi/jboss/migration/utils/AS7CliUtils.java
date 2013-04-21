@@ -17,6 +17,7 @@ import java.lang.reflect.Method;
 import java.util.Collection;
 import java.util.Set;
 import org.apache.commons.lang.StringUtils;
+import org.jboss.dmr.ModelType;
 
 /**
  *
@@ -42,12 +43,12 @@ public class AS7CliUtils {
      *  Queries the AS 7 if given resource exists.
      */
     public static boolean exists( final ModelNode resource, ModelControllerClient client ) throws IOException {
-        // Copy the address.
         ModelNode query = new ModelNode();
-        query.get(ClientConstants.OP_ADDR).set( resource.get(ClientConstants.OP_ADDR) );
         // Read operation.
         query.get(ClientConstants.OP).set(ClientConstants.READ_RESOURCE_OPERATION);
-        ModelNode res = client.execute( resource );
+        // Copy the address.
+        query.get(ClientConstants.OP_ADDR).set( resource.get(ClientConstants.OP_ADDR) );
+        ModelNode res = client.execute( query );
         return wasSuccess( res );
     }
 
@@ -252,4 +253,49 @@ public class AS7CliUtils {
         return str;
     }
 
+
+    /**
+     *   Formats Model node to the form of CLI script command - /foo=a/bar=b/:operation(param=value,...) .
+     */
+    public static String formatCommand( ModelNode command ) {
+        
+        if( ! command.has(ClientConstants.OP) )
+            throw new IllegalArgumentException("'"+ClientConstants.OP+"' not defined.");
+        if( command.get(ClientConstants.OP).getType() != ModelType.STRING )
+            throw new IllegalArgumentException("'"+ClientConstants.OP+"' must be a string.");
+        if( ! command.has(ClientConstants.OP_ADDR) )
+            throw new IllegalArgumentException("'"+ClientConstants.OP_ADDR+"' not defined.");
+        if( command.get(ClientConstants.OP_ADDR).getType() != ModelType.LIST )
+            throw new IllegalArgumentException("'"+ClientConstants.OP_ADDR+"' must be a list.");
+        
+        // Operation.
+        String op = command.get(ClientConstants.OP).asString();
+        
+        // Address
+        ModelNode addr = command.get(ClientConstants.OP_ADDR);
+        StringBuilder sb = new StringBuilder("/");
+        for( int i = 0; ; i++ ) {
+            if( ! addr.has(i) )  break;
+            ModelNode segment = addr.get( i );
+            String key = segment.keys().iterator().next();
+            sb.append(key).append('=').append(segment.get(key).asString()).append('/');
+        }
+        sb.append(':').append(op);
+        
+        // Params.
+        boolean hasParams = false;
+        Set<String> keys = command.keys();
+        for( String key : keys ) {
+            switch( key ){
+                case ClientConstants.OP:
+                case ClientConstants.OP_ADDR: continue;
+            }
+            sb.append( hasParams ? ',' : '(');
+            hasParams = true;
+            sb.append(key).append('=').append(command.get(key));
+        }
+        if( hasParams )  sb.append(')');
+        return sb.toString();
+    }
+    
 }// class

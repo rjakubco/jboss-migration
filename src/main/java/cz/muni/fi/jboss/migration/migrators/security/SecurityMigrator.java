@@ -11,7 +11,6 @@ import cz.muni.fi.jboss.migration.ex.LoadMigrationException;
 import cz.muni.fi.jboss.migration.ex.MigrationException;
 import cz.muni.fi.jboss.migration.migrators.security.jaxb.*;
 import cz.muni.fi.jboss.migration.spi.IConfigFragment;
-import cz.muni.fi.jboss.migration.utils.AS7CliUtils;
 import cz.muni.fi.jboss.migration.utils.Utils;
 import org.apache.commons.collections.map.MultiValueMap;
 import org.apache.commons.lang.StringUtils;
@@ -50,21 +49,6 @@ public class SecurityMigrator extends AbstractMigrator {
 
     private static final String AS7_CONFIG_DIR_PLACEHOLDER = "${jboss.server.config.dir}";
     
-    
-    // Configurables
-    private Configuration.IfExists ifExists = Configuration.IfExists.WARN;
-
-
-    @Override
-    public int examineConfigProperty( Configuration.ModuleSpecificProperty prop ) {
-        if( ! getConfigPropertyModuleName().equals( prop.getModuleId() ) ) return 0;
-        if( ! "ifExists".equals( prop.getPropName() ) ) return 0;
-        this.ifExists = Configuration.IfExists.valueOf_Custom(prop.getPropName());
-        return 1;
-    }
-    
-    
-
     
     // Files which must be copied into AS7
     private Set<String> fileNames = new HashSet();
@@ -274,7 +258,7 @@ public class SecurityMigrator extends AbstractMigrator {
         domainCmd.get(ClientConstants.OP_ADDR).add("security-domain", domain.getSecurityDomainName());
         // Action
         CliCommandAction action = new CliCommandAction( SecurityMigrator.class, createSecurityDomainScript(domain), domainCmd);
-        action.setIfExists( this.ifExists );
+        action.setIfExists( this.getIfExists() );
         actions.add( action );
 
         if (domain.getLoginModules() != null) {

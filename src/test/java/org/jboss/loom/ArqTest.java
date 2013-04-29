@@ -40,6 +40,7 @@ public class ArqTest {
                 
         return conf;
     }
+    
     private static Configuration createTestConfig_EAP_520_production() throws IOException {
         Configuration conf = new Configuration();
         
@@ -60,6 +61,7 @@ public class ArqTest {
      */
     @Test @Category( AS.class )
     @RunAsClient
+    //@Ignore
     public void test_AS_510_all( /*@ArquillianResource ManagementClient client*/ ) throws Exception {
         System.out.println( "doMigration" );
                 
@@ -86,6 +88,8 @@ public class ArqTest {
         if( as7Dir != null )  // AS 7.1.1 doesn't define it.
             conf.getGlobal().getAS7Config().setDir( as7Dir );
         
+        announceMigration( conf );
+        
         MigratorApp.validateConfiguration( conf );
         
         //MigratorApp.migrate( conf );
@@ -103,7 +107,7 @@ public class ArqTest {
     public void test_EAP_520_production( ) throws Exception {
         System.out.println( "doMigration" );
                 
-        Configuration conf = createTestConfig_AS_510_all();
+        Configuration conf = createTestConfig_EAP_520_production();
         AS7Config as7Config = conf.getGlobal().getAS7Config();
         
         ModelControllerClient as7client = ModelControllerClient.Factory.create(as7Config.getHost(), as7Config.getManagementPort());
@@ -113,10 +117,24 @@ public class ArqTest {
         if( as7Dir != null )  // AS 7.1.1 doesn't define it.
             conf.getGlobal().getAS7Config().setDir( as7Dir );
         
+        announceMigration( conf );
+        
         MigratorApp.validateConfiguration( conf );
         
         MigratorEngine migrator = new MigratorEngine(conf);
         migrator.doMigration();
+    }
+    
+    
+    private static void announceMigration( Configuration conf ){
+        String msg = "\n\n"
+                + "==========================================================="
+                + "  Migrating "
+                + "  " + conf.getGlobal().getAS5Config().getDir() + " | " + conf.getGlobal().getAS5Config().getProfileName()
+                + "  to "
+                + "   " + conf.getGlobal().getAS7Config().getDir() + " | " + conf.getGlobal().getAS7Config().getConfigPath()
+                + "===========================================================\n";
+        System.out.println( msg );
     }
     
 }// class

@@ -1,3 +1,10 @@
+/**
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0 .
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
+ * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and limitations under the License.
+ */
 package org.jboss.loom.actions;
 
 import org.jboss.loom.ex.ActionException;
@@ -7,12 +14,16 @@ import org.apache.commons.io.FileUtils;
 
 import java.io.File;
 import java.io.IOException;
+import org.jboss.loom.spi.ann.ActionDescriptor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * @author Ondrej Zizka, ozizka at redhat.com
  */
+@ActionDescriptor(
+    header = "Copy file"
+)
 public class CopyFileAction extends FileAbstractAction {
     private static final Logger log = LoggerFactory.getLogger(CopyFileAction.class);
 
@@ -68,7 +79,11 @@ public class CopyFileAction extends FileAbstractAction {
         if( dest.exists() && this.ifExists == IfExists.SKIP )
             return;
         try {
-            FileUtils.copyFile( src, dest );
+            if( src.isDirectory() )
+                FileUtils.copyDirectory( src, dest );
+            else //if( src.isFile() )
+                FileUtils.copyFile( src, dest );
+            
             setState(State.DONE);
         } catch (IOException ex) {
             throw new ActionException(this, "Copying failed: " + ex.getMessage(), ex);

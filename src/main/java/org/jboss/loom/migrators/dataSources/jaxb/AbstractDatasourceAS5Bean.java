@@ -1,3 +1,10 @@
+/**
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0 .
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
+ * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and limitations under the License.
+ */
 package org.jboss.loom.migrators.dataSources.jaxb;
 
 import org.jboss.loom.spi.IConfigFragment;
@@ -7,10 +14,9 @@ import javax.xml.bind.annotation.XmlElements;
 import java.util.List;
 
 /**
- * User: Roman Jakubco
- * Date: 4/28/13
+ *  Datasource base class.
  */
-public abstract class AbstractDatasourceAS5Bean implements IConfigFragment{
+public abstract class AbstractDatasourceAS5Bean implements IConfigFragment {
     @XmlElement(name = "jndi-name")
     private String jndiName;
 
@@ -109,260 +115,71 @@ public abstract class AbstractDatasourceAS5Bean implements IConfigFragment{
     private List<ConnectionPropertyBean> connectionProperties;
 
 
-    public String getTransIsolation() {
-        return transIsolation;
-    }
-
-    public void setTransIsolation(String transIsolation) {
-        this.transIsolation = transIsolation;
-    }
-
-    public String getConnectionUrl() {
-        return connectionUrl;
-    }
-
-    public void setConnectionUrl(String connectionUrl) {
-        this.connectionUrl = connectionUrl;
-    }
-
-    public List<ConnectionPropertyBean> getConnectionProperties() {
-        return connectionProperties;
-    }
-
-    public void setConnectionProperties(List<ConnectionPropertyBean> connectionProperties) {
-        this.connectionProperties = connectionProperties;
-    }
-
-
-    public String getJndiName() {
-        return jndiName;
-    }
-
-    public void setJndiName(String jndiName) {
-        this.jndiName = jndiName;
-    }
-
-    public String getUseJavaContext() {
-        return useJavaContext;
-    }
-
-    public void setUseJavaContext(String useJavaContext) {
-        this.useJavaContext = useJavaContext;
-    }
-
-    public String getUrlDelimeter() {
-        return urlDelimeter;
-    }
-
-    public void setUrlDelimeter(String urlDelimeter) {
-        this.urlDelimeter = urlDelimeter;
-    }
-
-    public String getUrlSelectStratClName() {
-        return urlSelectStratClName;
-    }
-
-    public void setUrlSelectStratClName(String urlSelectStratClName) {
-        this.urlSelectStratClName = urlSelectStratClName;
-    }
-
-    public String getDriverClass() {
-        return driverClass;
-    }
-
-    public void setDriverClass(String driverClass) {
-        this.driverClass = driverClass;
-    }
-
-    public String getNewConnectionSql() {
-        return newConnectionSql;
-    }
-
-    public void setNewConnectionSql(String newConnectionSql) {
-        this.newConnectionSql = newConnectionSql;
-    }
-
-    public String getPrefill() {
-        return prefill;
-    }
-
-    public void setPrefill(String prefill) {
-        this.prefill = prefill;
-    }
-
-    public String getMinPoolSize() {
-        return minPoolSize;
-    }
-
-    public void setMinPoolSize(String minPoolSize) {
-        this.minPoolSize = minPoolSize;
-    }
-
-    public String getMaxPoolSize() {
-        return maxPoolSize;
-    }
-
-    public void setMaxPoolSize(String maxPoolSize) {
-        this.maxPoolSize = maxPoolSize;
-    }
-
-    public String getUserName() {
-        return userName;
-    }
-
-    public void setUserName(String userName) {
-        this.userName = userName;
-    }
-
-    public String getPassword() {
-        return password;
-    }
-
-    public void setPassword(String password) {
-        this.password = password;
-    }
-
-    public String getSecurityDomain() {
-        return securityDomain;
-    }
-
-    public void setSecurityDomain(String securityDomain) {
-        this.securityDomain = securityDomain;
-    }
-
-    public String getBlockingTimeMillis() {
-        return blockingTimeMillis;
-    }
-
-    public void setBlockingTimeMillis(String blockingTimeMillis) {
-        this.blockingTimeMillis = blockingTimeMillis;
-    }
-
-    public String getIdleTimeoutMin() {
-        return idleTimeoutMin;
-    }
-
-    public void setIdleTimeoutMin(String idleTimeoutMin) {
-        this.idleTimeoutMin = idleTimeoutMin;
-    }
-
-    public String getSetTxQueryTime() {
-        return setTxQueryTime;
-    }
-
-    public void setSetTxQueryTime(String setTxQueryTime) {
-        this.setTxQueryTime = setTxQueryTime;
-    }
-
-    public String getQueryTimeout() {
-        return queryTimeout;
-    }
-
-    public void setQueryTimeout(String queryTimeout) {
-        this.queryTimeout = queryTimeout;
-    }
-
-    public String getAllocationRetry() {
-        return allocationRetry;
-    }
-
-    public void setAllocationRetry(String allocationRetry) {
-        this.allocationRetry = allocationRetry;
-    }
-
-    public String getAllocRetryWaitMillis() {
-        return allocRetryWaitMillis;
-    }
-
-    public void setAllocRetryWaitMillis(String allocRetryWaitMillis) {
-        this.allocRetryWaitMillis = allocRetryWaitMillis;
-    }
-
-    public String getUseTryLock() {
-        return useTryLock;
-    }
-
-    public void setUseTryLock(String useTryLock) {
-        this.useTryLock = useTryLock;
-    }
-
-    public String getCheckValidConSql() {
-        return checkValidConSql;
-    }
-
-    public void setCheckValidConSql(String checkValidConSql) {
-        this.checkValidConSql = checkValidConSql;
-    }
-
-    public String getValidateOnMatch() {
-        return validateOnMatch;
-    }
-
-    public void setValidateOnMatch(String validateOnMatch) {
-        this.validateOnMatch = validateOnMatch;
-    }
-
-    public String getBackgroundValid() {
-        return backgroundValid;
-    }
-
-    public void setBackgroundValid(String backgroundValid) {
-        this.backgroundValid = backgroundValid;
-    }
-
-    public String getBackgroundValidMillis() {
-        return backgroundValidMillis;
-    }
-
-    public void setBackgroundValidMillis(String backgroundValidMillis) {
-        this.backgroundValidMillis = backgroundValidMillis;
-    }
-
-    public String getExcepSorterClName() {
-        return excepSorterClName;
-    }
-
-    public void setExcepSorterClName(String excepSorterClName) {
-        this.excepSorterClName = excepSorterClName;
-    }
-
-    public String getValidConCheckerClName() {
-        return validConCheckerClName;
-    }
-
-    public void setValidConCheckerClName(String validConCheckerClName) {
-        this.validConCheckerClName = validConCheckerClName;
-    }
-
-    public String getStaleConCheckerClName() {
-        return staleConCheckerClName;
-    }
-
-    public void setStaleConCheckerClName(String staleConCheckerClName) {
-        this.staleConCheckerClName = staleConCheckerClName;
-    }
-
-    public String getPreStatementCacheSize() {
-        return preStatementCacheSize;
-    }
-
-    public void setPreStatementCacheSize(String preStatementCacheSize) {
-        this.preStatementCacheSize = preStatementCacheSize;
-    }
-
-    public String getTrackStatements() {
-        return trackStatements;
-    }
-
-    public void setTrackStatements(String trackStatements) {
-        this.trackStatements = trackStatements;
-    }
-
-    public String getSharePreStatements() {
-        return sharePreStatements;
-    }
-
-    public void setSharePreStatements(String sharePreStatements) {
-        this.sharePreStatements = sharePreStatements;
-    }
+    public String getTransIsolation() { return transIsolation; }
+    public void setTransIsolation(String transIsolation) { this.transIsolation = transIsolation; }
+    public String getConnectionUrl() { return connectionUrl; }
+    public void setConnectionUrl(String connectionUrl) { this.connectionUrl = connectionUrl; }
+    public List<ConnectionPropertyBean> getConnectionProperties() { return connectionProperties; }
+    public void setConnectionProperties(List<ConnectionPropertyBean> connectionProperties) { this.connectionProperties = connectionProperties; }
+
+    //<editor-fold defaultstate="collapsed" desc="get/set">
+    public String getJndiName() { return jndiName; }
+    public void setJndiName(String jndiName) { this.jndiName = jndiName; }
+    public String getUseJavaContext() { return useJavaContext; }
+    public void setUseJavaContext(String useJavaContext) { this.useJavaContext = useJavaContext; }
+    public String getUrlDelimeter() { return urlDelimeter; }
+    public void setUrlDelimeter(String urlDelimeter) { this.urlDelimeter = urlDelimeter; }
+    public String getUrlSelectStratClName() { return urlSelectStratClName; }
+    public void setUrlSelectStratClName(String urlSelectStratClName) { this.urlSelectStratClName = urlSelectStratClName; }
+    public String getDriverClass() { return driverClass; }
+    public void setDriverClass(String driverClass) { this.driverClass = driverClass; }
+    public String getNewConnectionSql() { return newConnectionSql; }
+    public void setNewConnectionSql(String newConnectionSql) { this.newConnectionSql = newConnectionSql; }
+    public String getPrefill() { return prefill; }
+    public void setPrefill(String prefill) { this.prefill = prefill; }
+    public String getMinPoolSize() { return minPoolSize; }
+    public void setMinPoolSize(String minPoolSize) { this.minPoolSize = minPoolSize; }
+    public String getMaxPoolSize() { return maxPoolSize; }
+    public void setMaxPoolSize(String maxPoolSize) { this.maxPoolSize = maxPoolSize; }
+    public String getUserName() { return userName; }
+    public void setUserName(String userName) { this.userName = userName; }
+    public String getPassword() { return password; }
+    public void setPassword(String password) { this.password = password; }
+    public String getSecurityDomain() { return securityDomain; }
+    public void setSecurityDomain(String securityDomain) { this.securityDomain = securityDomain; }
+    public String getBlockingTimeMillis() { return blockingTimeMillis; }
+    public void setBlockingTimeMillis(String blockingTimeMillis) { this.blockingTimeMillis = blockingTimeMillis; }
+    public String getIdleTimeoutMin() { return idleTimeoutMin; }
+    public void setIdleTimeoutMin(String idleTimeoutMin) { this.idleTimeoutMin = idleTimeoutMin; }
+    public String getSetTxQueryTime() { return setTxQueryTime; }
+    public void setSetTxQueryTime(String setTxQueryTime) { this.setTxQueryTime = setTxQueryTime; }
+    public String getQueryTimeout() { return queryTimeout; }
+    public void setQueryTimeout(String queryTimeout) { this.queryTimeout = queryTimeout; }
+    public String getAllocationRetry() { return allocationRetry; }
+    public void setAllocationRetry(String allocationRetry) { this.allocationRetry = allocationRetry; }
+    public String getAllocRetryWaitMillis() { return allocRetryWaitMillis; }
+    public void setAllocRetryWaitMillis(String allocRetryWaitMillis) { this.allocRetryWaitMillis = allocRetryWaitMillis; }
+    public String getUseTryLock() { return useTryLock; }
+    public void setUseTryLock(String useTryLock) { this.useTryLock = useTryLock; }
+    public String getCheckValidConSql() { return checkValidConSql; }
+    public void setCheckValidConSql(String checkValidConSql) { this.checkValidConSql = checkValidConSql; }
+    public String getValidateOnMatch() { return validateOnMatch; }
+    public void setValidateOnMatch(String validateOnMatch) { this.validateOnMatch = validateOnMatch; }
+    public String getBackgroundValid() { return backgroundValid; }
+    public void setBackgroundValid(String backgroundValid) { this.backgroundValid = backgroundValid; }
+    public String getBackgroundValidMillis() { return backgroundValidMillis; }
+    public void setBackgroundValidMillis(String backgroundValidMillis) { this.backgroundValidMillis = backgroundValidMillis; }
+    public String getExcepSorterClName() { return excepSorterClName; }
+    public void setExcepSorterClName(String excepSorterClName) { this.excepSorterClName = excepSorterClName; }
+    public String getValidConCheckerClName() { return validConCheckerClName; }
+    public void setValidConCheckerClName(String validConCheckerClName) { this.validConCheckerClName = validConCheckerClName; }
+    public String getStaleConCheckerClName() { return staleConCheckerClName; }
+    public void setStaleConCheckerClName(String staleConCheckerClName) { this.staleConCheckerClName = staleConCheckerClName; }
+    public String getPreStatementCacheSize() { return preStatementCacheSize; }
+    public void setPreStatementCacheSize(String preStatementCacheSize) { this.preStatementCacheSize = preStatementCacheSize; }
+    public String getTrackStatements() { return trackStatements; }
+    public void setTrackStatements(String trackStatements) { this.trackStatements = trackStatements; }
+    public String getSharePreStatements() { return sharePreStatements; }
+    public void setSharePreStatements(String sharePreStatements) { this.sharePreStatements = sharePreStatements; }
+    //</editor-fold>
 }

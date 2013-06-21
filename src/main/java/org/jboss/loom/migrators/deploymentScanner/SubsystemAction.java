@@ -1,3 +1,10 @@
+/**
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0 .
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
+ * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and limitations under the License.
+ */
 package org.jboss.loom.migrators.deploymentScanner;
 
 import org.jboss.loom.actions.AbstractStatefulAction;
@@ -17,10 +24,10 @@ import javax.xml.xpath.XPathConstants;
 import javax.xml.xpath.XPathExpressionException;
 import javax.xml.xpath.XPathFactory;
 import java.io.File;
+import org.jboss.loom.utils.XmlUtils;
 
 /**
  * User: rsearls
- * Date: 4/18/13
  */
 public class SubsystemAction extends AbstractStatefulAction {
 
@@ -43,27 +50,22 @@ public class SubsystemAction extends AbstractStatefulAction {
     public void preValidate() throws MigrationException {
 
         if (destFile == null || !destFile.exists()){
-            throw new MigrationException(
-                "Destination configuration file " +
-                    ((destFile == null)? "name is NULL." : destFile.getAbsolutePath() + " is not found."));
-        } else if (!destFile.canWrite()){
-            throw new MigrationException("No write permissions for file "
-                + destFile.getAbsolutePath());
-        }
+            throw new MigrationException("Destination config file not found: " +
+                    ((destFile == null)? "<name is NULL>." : destFile.getAbsolutePath()));
+        } 
+        if( ! destFile.canWrite() )
+            throw new MigrationException("No write permissions for " + destFile.getAbsolutePath());
 
         // confirm required xml element
         try {
             XPath xpath = XPathFactory.newInstance().newXPath();
             String exp = "/server/profile";
-            NodeList pList = (NodeList) xpath.evaluate(exp, destDoc,
-                XPathConstants.NODESET);
-
-            if (pList.getLength() == 0) {
-                throw new MigrationException("profile element not found in file: "
-                    + destDoc.getBaseURI());
-            }
-        } catch (XPathExpressionException e) {
-            throw new MigrationException(e);
+            NodeList pList = (NodeList) xpath.evaluate(exp, destDoc, XPathConstants.NODESET);
+            if (pList.getLength() == 0)
+                throw new MigrationException("profile element not found in file: " + destDoc.getBaseURI());
+        }
+        catch (XPathExpressionException ex) {
+            throw new MigrationException(ex);
         }
     }
 
@@ -72,51 +74,38 @@ public class SubsystemAction extends AbstractStatefulAction {
     public void perform() throws MigrationException {
 
         try {
-
-            DocumentBuilder docBuilder = Utils.createXmlDocumentBuilder();
-
+            DocumentBuilder docBuilder = XmlUtils.createXmlDocumentBuilder();
             XPath xpath = XPathFactory.newInstance().newXPath();
             String exp = "/server/profile";
-            NodeList pList = (NodeList) xpath.evaluate(exp, destDoc,
-                XPathConstants.NODESET);
+            NodeList pList = (NodeList) xpath.evaluate(exp, destDoc, XPathConstants.NODESET);
 
-            if (pList.getLength() > 0) {
+            if(pList.getLength() == 0)
+                throw new MigrationException("profile element not found in file: " + destDoc.getBaseURI());
 
-                JAXBContext jaxbCtx = JAXBContext.newInstance(Subsystem.class);
-                Marshaller marshaller = jaxbCtx.createMarshaller();
+            JAXBContext jaxbCtx = JAXBContext.newInstance(Subsystem.class);
+            Marshaller marshaller = jaxbCtx.createMarshaller();
 
-                // transform data into DOM obj for insertion
-                Document tmpDoc = docBuilder.newDocument();
-                marshaller.marshal(subsystem, tmpDoc);
+            // transform data into DOM obj for insertion
+            Document tmpDoc = docBuilder.newDocument();
+            marshaller.marshal(subsystem, tmpDoc);
 
-                Node newChild = destDoc.adoptNode(
-                    tmpDoc.getDocumentElement().cloneNode(true));
-                pList.item(0).appendChild(newChild);
-
-            } else {
-                throw new MigrationException("profile element not found in file: "
-                    + destDoc.getBaseURI());
-            }
-
+            Node newChild = destDoc.adoptNode( tmpDoc.getDocumentElement().cloneNode(true) );
+            pList.item(0).appendChild(newChild);
+            
             setState(State.DONE);
-
-        } catch (JAXBException e) {
+        }
+        catch (JAXBException | XPathExpressionException e) {
             throw new MigrationException(e);
-        } catch(XPathExpressionException xee) {
-            throw new MigrationException(xee);
         }
     }
 
 
     @Override
     public void rollback() throws MigrationException {
-
-        if (rootNodeBackup == null) {
+        if (rootNodeBackup == null)
             throw new MigrationException("No backup data to rollback to.");
-        } else {
-            Node rootNode = (Node)destDoc;
-            rootNode.replaceChild(rootNodeBackup, rootNode);
-        }
+        Node rootNode = (Node)destDoc;
+        rootNode.replaceChild(rootNodeBackup, rootNode);
         setState(State.ROLLED_BACK);
     }
 
@@ -127,15 +116,12 @@ public class SubsystemAction extends AbstractStatefulAction {
         try {
             XPath xpath = XPathFactory.newInstance().newXPath();
             String exp = "/server/profile/subsystem/deployment-scanner";
-            NodeList pList = (NodeList) xpath.evaluate(exp, destDoc,
-                XPathConstants.NODESET);
+            NodeList pList = (NodeList) xpath.evaluate(exp, destDoc, XPathConstants.NODESET);
 
-            if (pList.getLength() == 0){
-                throw new MigrationException(
-                    "new deployment-scanner subsystem not successfully created");
-            }
-
-        } catch (XPathExpressionException xee) {
+            if (pList.getLength() == 0)
+                throw new MigrationException("new deployment-scanner subsystem not successfully created");
+        }
+        catch (XPathExpressionException xee) {
             throw new MigrationException(xee);
         }
     }

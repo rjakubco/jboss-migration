@@ -1,23 +1,27 @@
+/**
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0 .
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
+ * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and limitations under the License.
+ */
 package org.jboss.loom.migrators.deploymentScanner;
 
 import org.jboss.loom.migrators.AbstractMigrator;
-import org.jboss.loom.CliApiCommandBuilder;
-import org.jboss.loom.MigrationContext;
-import org.jboss.loom.MigrationData;
-import org.jboss.loom.actions.CliCommandAction;
+import org.jboss.loom.ctx.MigrationContext;
+import org.jboss.loom.ctx.MigratorData;
 import org.jboss.loom.conf.AS5Config;
+import org.jboss.loom.conf.AS7Config;
 import org.jboss.loom.conf.GlobalConfiguration;
 import org.jboss.loom.ex.LoadMigrationException;
 import org.jboss.loom.spi.IConfigFragment;
 import org.jboss.loom.utils.Utils;
-import org.apache.commons.collections.map.MultiValueMap;
-import org.jboss.as.controller.client.helpers.ClientConstants;
-import org.jboss.dmr.ModelNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
+import org.w3c.dom.Element;
 import org.xml.sax.SAXException;
 
 import javax.xml.bind.JAXBContext;
@@ -29,17 +33,17 @@ import javax.xml.xpath.XPathConstants;
 import javax.xml.xpath.XPathExpressionException;
 import javax.xml.xpath.XPathFactory;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.ArrayList;
 import java.util.Date;
+import java.util.LinkedList;
 import java.util.List;
 import org.jboss.loom.migrators.deploymentScanner.jaxb.ListType;
 import org.jboss.loom.migrators.deploymentScanner.jaxb.PropertyType;
 import org.jboss.loom.migrators.deploymentScanner.jaxb.StandaloneDeploymentScannerType;
 import org.jboss.loom.migrators.deploymentScanner.jaxb.Subsystem;
 import org.jboss.loom.migrators.deploymentScanner.jaxb.ValueType;
+import org.jboss.loom.utils.XmlUtils;
 
 /**
  * User: rsearls
@@ -47,34 +51,31 @@ import org.jboss.loom.migrators.deploymentScanner.jaxb.ValueType;
  */
 public class DeploymentScannerMigrator extends AbstractMigrator {
 
-    private static final Logger log = LoggerFactory.getLogger(
-        DeploymentScannerMigrator.class);
+    private static final Logger log = LoggerFactory.getLogger( DeploymentScannerMigrator.class );
 
-
-    public DeploymentScannerMigrator(GlobalConfiguration globalConfig,
-                                     MultiValueMap config) {
-        super(globalConfig, config);
-
+    public DeploymentScannerMigrator(GlobalConfiguration globalConfig) {
+        super(globalConfig);
     }
 
-    @Override
-    protected String getConfigPropertyModuleName() {
-        return "deployment-scanner";
-    }
+    @Override protected String getConfigPropertyModuleName() { return "deployment-scanner"; }
 
+    
     // step 1
     @Override
-    public void loadAS5Data(MigrationContext ctx) throws LoadMigrationException {
+    public void loadSourceServerConfig(MigrationContext ctx) throws LoadMigrationException {
 
         AS5Config as5Config = super.getGlobalConfig().getAS5Config();
         int scanPeriod = getScanPeriod(as5Config);
 
-        File f = Utils.createPath(as5Config.getDir(), "server",
-            as5Config.getProfileName(), "conf/bootstrap", "profile.xml");
+        File f = Utils.createPath(as5Config.getConfDir(), "bootstrap/profile.xml");
 
-        if (f.exists() && f.canRead()) {
+        if( f.exists() && f.canRead() ) {
             List<ValueType> valueList = getDeploymentDirs(f);
-            MigrationData mData = new MigrationData();
+
+            valueList = checkDestinationPath(valueList);
+            valueList = checkSourcePath(valueList);
+
+            MigratorData mData = new MigratorData();
             mData.getConfigFragments().addAll(valueList);
             ctx.getMigrationData().put(this.getClass(), mData);
 
@@ -82,10 +83,75 @@ public class DeploymentScannerMigrator extends AbstractMigrator {
                 v.setScanPeriod(scanPeriod);
             }
         } else {
-            throw new LoadMigrationException("Cannot find/open file: " +
-                f.getAbsolutePath(), new FileNotFoundException());
+            throw new LoadMigrationException("Cannot find/open file: " + f.getAbsolutePath());
         }
     }
+
+
+    /**
+     * Check the destination subsystem entries for duplicate directory names.
+     * Remove the dup ones from the create list.
+     *
+     * @param valueList
+     * @return
+     * @throws LoadMigrationException
+     */
+    private List<ValueType> checkDestinationPath(List<ValueType> valueList)
+        throws LoadMigrationException {
+
+        AS7Config as7Config = super.getGlobalConfig().getAS7Config();
+
+        File f = new File(as7Config.getConfigFilePath());
+        if( ! (f.exists() && f.canRead() ) )
+            return valueList;
+        
+        try {
+            DocumentBuilder docBuilder = XmlUtils.createXmlDocumentBuilder();
+            Document doc = docBuilder.parse(f);
+
+            XPath xpath = XPathFactory.newInstance().newXPath();
+            String exp = "/server/profile/subsystem/deployment-scanner";
+            NodeList nodeList = (NodeList) xpath.evaluate(exp, doc, XPathConstants.NODESET );
+
+            int cnt = nodeList.getLength();
+            for( int i =0; i < cnt; i++ ){
+                Element node = (Element) nodeList.item(i);
+                String tmpPath = node.getAttribute("path");
+
+                List<ValueType> removeList = new LinkedList();
+                for (ValueType v: valueList){
+                    if (tmpPath.equals(v.getDeployPath()))
+                        removeList.add(v);
+                }
+
+                // remove the duplicates
+                for (ValueType v: removeList)
+                    valueList.remove(v);
+            }
+        }
+        catch ( SAXException | IOException | XPathExpressionException saxe) {
+            throw new LoadMigrationException(saxe);
+        }
+        return valueList;
+    }
+
+
+    private List<ValueType> checkSourcePath(List<ValueType> valueList) {
+
+        List<ValueType> notFoundList = new LinkedList();
+        for (ValueType v : valueList) {
+            File f = new File(v.getDeployPath());
+            if( !f.exists() )
+                notFoundList.add(v);
+        }
+
+        // TBC: Why not remove directly?
+        for( ValueType v : notFoundList){
+            valueList.remove(v);
+        }
+        return valueList;
+    }
+
 
     // step 2
     @Override
@@ -94,32 +160,26 @@ public class DeploymentScannerMigrator extends AbstractMigrator {
         File as7configFile = new File(getGlobalConfig().getAS7Config().getConfigFilePath());
 
         try {
-
             Document destDoc = ctx.getAS7ConfigXmlDoc();
 
             XPath xpath = XPathFactory.newInstance().newXPath();
             String exp = "/server/profile/subsystem/deployment-scanner";
-            NodeList nList = (NodeList) xpath.evaluate(exp, destDoc,
-                XPathConstants.NODESET);
+            NodeList nList = (NodeList) xpath.evaluate(exp, destDoc, XPathConstants.NODESET);
 
             if (0 == nList.getLength()) {
                 // No deployment-scanner subsystem found.  Prep to add
-
-                Subsystem subsystem = createDeploymentScannerSubsystem(
-                    destDoc, ctx, xpath);
-
-                if (subsystem != null) {
-                    SubsystemAction action = new SubsystemAction(subsystem,
-                        as7configFile, ctx.getAS7ConfigXmlDoc());
+                Subsystem subsystem = createDeploymentScannerSubsystem( destDoc, ctx, xpath );
+                if( subsystem != null ) {
+                    SubsystemAction action = new SubsystemAction(subsystem, as7configFile, ctx.getAS7ConfigXmlDoc());
                     ctx.getActions().add(action);
                 }
-            } else {
-
+            } 
+            else {
                 // deployment-scanner subsystem exists.  Prep to add element
 
+                // TODO: This needs to be done using management API.
                 StandaloneDeploymentScannerAction sAction =
-                    new StandaloneDeploymentScannerAction(as7configFile,
-                        ctx.getAS7ConfigXmlDoc());
+                    new StandaloneDeploymentScannerAction(as7configFile, ctx.getAS7ConfigXmlDoc());
 
                 for (IConfigFragment fragment : ctx.getMigrationData().get(
                     DeploymentScannerMigrator.class).getConfigFragments()) {
@@ -129,13 +189,8 @@ public class DeploymentScannerMigrator extends AbstractMigrator {
                     sAction.addStandaloneDeploymentScannerType(destDScanner);
 
                     //- create CLI cmds
-                    ModelNode mNode = createModelNode((ValueType)fragment, ctx);
-                    //ctx.getActions().add(new CliCommandAction(
-                    //    DeploymentScannerMigrator.class, "create deployment-scanner", mNode));
-
-                    //- workaround .. force tools not to fail with null exception.
-                    ctx.getBatch().add(
-                        new org.jboss.as.cli.batch.impl.DefaultBatchedCommand("create deployment-scanner",  mNode));
+                    String cliCmdStr = createCliCmdStr((ValueType)fragment);
+                    sAction.addWarning(cliCmdStr);
                 }
 
                 if (!sAction.getStandaloneDeploymentScannerTypeList().isEmpty()){
@@ -143,19 +198,13 @@ public class DeploymentScannerMigrator extends AbstractMigrator {
                 }
             }
 
-        } catch (JAXBException e) {
-            System.out.println(e);
-        } catch(XPathExpressionException xee) {
-            System.out.println(xee);
+        } catch( XPathExpressionException| JAXBException e) {
+            // TODO: Throw something.
+            log.error(e.toString());
         }
     }
 
-    /**
-     *
-     * @param fragment
-     * @return
-     */
-    private ModelNode createModelNode(ValueType fragment, MigrationContext ctx){
+    private String createCliCmdStr(ValueType fragment){
 
         StringBuilder sb = new StringBuilder();
         sb.append("/subsystem=deployment-scanner/scanner=");
@@ -166,29 +215,7 @@ public class DeploymentScannerMigrator extends AbstractMigrator {
         sb.append(fragment.getScanPeriod());
         sb.append(")");
 
-        ModelNode mNode = new ModelNode();
-        mNode.set(sb.toString());
-        //System.out.println("ModelNode: " + mNode.asString());  // debug
-
-        //-------
-        ModelNode connDefCmd = new ModelNode();
-        connDefCmd.get(ClientConstants.OP).set(ClientConstants.ADD);
-        connDefCmd.get(ClientConstants.OP_ADDR).add("subsystem", "deployment-scanner");
-        connDefCmd.get(ClientConstants.OP_ADDR).add("scanner", Long.toString((new Date()).getTime()));
-
-        CliApiCommandBuilder builder = new CliApiCommandBuilder(connDefCmd);
-
-        builder.addProperty("path", fragment.getDeployPath());
-        Integer scanPeriod = new Integer(fragment.getScanPeriod());
-        builder.addProperty("scan-interval", scanPeriod.toString());
-
-        //System.out.println("connDefCmd: asString:" + connDefCmd.asString());
-        //System.out.println("connDefCmd: string:" + connDefCmd.toString());
-
-        ctx.getActions().add(new CliCommandAction(DeploymentScannerMigrator.class,
-            mNode.asString(), builder.getCommand()));
-
-        return mNode;
+        return sb.toString();
     }
 
 
@@ -228,37 +255,26 @@ public class DeploymentScannerMigrator extends AbstractMigrator {
      */
     private List<ValueType> getDeploymentDirs(File f) throws LoadMigrationException {
 
-        List<ValueType> resultList = new ArrayList<ValueType>();
+        List<ValueType> resultList = new LinkedList();
 
         try {
-
-            DocumentBuilder docBuilder = Utils.createXmlDocumentBuilder();
+            DocumentBuilder docBuilder = XmlUtils.createXmlDocumentBuilder();
             Document doc = docBuilder.parse(f);
 
             XPath xpath = XPathFactory.newInstance().newXPath();
             String exp = "/deployment/bean[@name='BootstrapProfileFactory']/property[@name='applicationURIs']//list[@elementClass='java.net.URI']";
             Node  n = (Node) xpath.evaluate(exp, doc, XPathConstants.NODE);
 
-            Unmarshaller unmarshaller = JAXBContext.newInstance(
-                ListType.class).createUnmarshaller();
+            Unmarshaller unmarshaller = JAXBContext.newInstance(ListType.class).createUnmarshaller();
             ListType l = (ListType) unmarshaller.unmarshal(n);
 
-
             for (ValueType v : l.getValue()) {
-
-                if (v.isExternalDir()) {
+                if (v.isExternalDir())
                     resultList.add(v);
-                }
             }
-
-        } catch (JAXBException e) {
+        }
+        catch (JAXBException | SAXException | IOException | XPathExpressionException e) {
             throw new LoadMigrationException(e);
-        } catch (SAXException saxe) {
-            throw new LoadMigrationException(saxe);
-        } catch (IOException ioe) {
-            throw new LoadMigrationException(ioe);
-        } catch (XPathExpressionException xee) {
-            throw new LoadMigrationException(xee);
         }
         return resultList;
     }
@@ -268,49 +284,40 @@ public class DeploymentScannerMigrator extends AbstractMigrator {
      * @param as5Config
      * @return
      */
-    private int getScanPeriod(AS5Config  as5Config) throws LoadMigrationException {
+    private int getScanPeriod(AS5Config as5Config) throws LoadMigrationException {
 
         int result = 5000;  // AS5 default value
 
         try {
+            File f = Utils.createPath(as5Config.getDeployDir(), "hdscanner-jboss-beans.xml");
 
-            File f = Utils.createPath(as5Config.getDir(), "server",
-                as5Config.getProfileName(), "deploy", "hdscanner-jboss-beans.xml");
-
-            DocumentBuilder docBuilder = Utils.createXmlDocumentBuilder();
+            DocumentBuilder docBuilder = XmlUtils.createXmlDocumentBuilder();
             Document doc = docBuilder.parse(f);
 
-
+            // Get the data into a JAXB bean.
             XPath xpath = XPathFactory.newInstance().newXPath();
             String exp = "/deployment/bean/property[@name='scanPeriod']";
             Node node = (Node) xpath.evaluate(exp, doc, XPathConstants.NODE);
-
-            if (node != null) {
-
-                JAXBContext jaxbCtx = JAXBContext.newInstance(PropertyType.class);
-                Unmarshaller unmarshaller = jaxbCtx.createUnmarshaller();
-
-                PropertyType pType = (PropertyType) unmarshaller.unmarshal(node);
-                List<Serializable> contentList = pType.getContent();
-                if (contentList.size() > 0) {
-                    Serializable s = contentList.get(0);
-                    if (s instanceof String){
-                        result = Integer.parseInt((String)s);
-                        System.out.println("scanPeriod: " + result);
-                    }
-                }
+            if( node == null )
+                return result;
+            JAXBContext jaxbCtx = JAXBContext.newInstance(PropertyType.class);
+            Unmarshaller unmarshaller = jaxbCtx.createUnmarshaller();
+            PropertyType pType = (PropertyType) unmarshaller.unmarshal(node);
+            
+            List<Serializable> contentList = pType.getContent();
+            if( contentList.isEmpty() ) 
+                return result;
+            
+            Serializable s = contentList.get(0);
+            if( s instanceof String ){
+                result = Integer.parseInt((String)s);
+                log.trace("scanPeriod: " + result);
             }
-
-        } catch (JAXBException e) {
+        }
+        catch (JAXBException | SAXException | IOException | XPathExpressionException e) {
             throw new LoadMigrationException(e);
-        } catch (SAXException saxe) {
-            throw new LoadMigrationException(saxe);
-        } catch (IOException ioe) {
-            throw new LoadMigrationException(ioe);
-        } catch (XPathExpressionException xee) {
-            throw new LoadMigrationException(xee);
         }
         return result;
     }
 
-}
+}// class

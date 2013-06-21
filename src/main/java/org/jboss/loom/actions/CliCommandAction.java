@@ -1,3 +1,10 @@
+/**
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0 .
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
+ * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and limitations under the License.
+ */
 package org.jboss.loom.actions;
 
 import org.jboss.loom.conf.Configuration;
@@ -10,16 +17,24 @@ import static org.jboss.loom.conf.Configuration.IfExists.WARN;
 import org.jboss.loom.ex.ActionException;
 import org.jboss.loom.ex.MigrationException;
 import org.jboss.loom.spi.IMigrator;
-import org.jboss.loom.utils.AS7CliUtils;
+import org.jboss.loom.utils.as7.AS7CliUtils;
 import org.jboss.loom.utils.as7.BatchedCommandWithAction;
 import org.jboss.as.cli.batch.BatchedCommand;
 import org.jboss.dmr.ModelNode;
+import org.jboss.loom.spi.ann.ActionDescriptor;
+import org.jboss.loom.spi.ann.Property;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
  * @author Ondrej Zizka, ozizka at redhat.com
  */
+@ActionDescriptor(
+    header = "Perform CLI command:",
+    props = {
+        @Property(name="cliCommand", expr = "command.command", style = "code") // TODO
+    }
+)
 public class CliCommandAction extends AbstractStatefulAction {
     private static final Logger log = LoggerFactory.getLogger(CliCommandAction.class);
     
@@ -45,7 +60,7 @@ public class CliCommandAction extends AbstractStatefulAction {
 
     @Override
     public String toDescription() {
-        return "Perform CLI command: " + this.command.getCommand();
+        return "Perform CLI command: " + this.command.getCommand() + " ; ifExists=" + ifExists + ", todo=" + todo;
     }
     
 
@@ -53,15 +68,16 @@ public class CliCommandAction extends AbstractStatefulAction {
     @Override
     public void preValidate() throws MigrationException {
         if ((this.command.getCommand() == null) || (this.command.getCommand().isEmpty()))
-            throw new ActionException(this, "No CLI script set for CliCommandAction");
+            throw new ActionException(this, "No CLI script set for CliCommandAction.");
         if (this.command.getRequest() == null) {
-            throw new ActionException(this, "ModelNode for CliCommandAction cannot be null");
+            throw new ActionException(this, "ModelNode for CliCommandAction cannot be null.");
         }
         
         // If already exists, 
         boolean exists;
         try {
             exists = AS7CliUtils.exists( this.command.getRequest(), getMigrationContext().getAS7Client() );
+            //log.debug( "Exists? " + exists + "  :  " + this.command );
         } catch( Exception ex ) {
             throw new ActionException( this, "Failed querying AS 7 for existence of " + this.command.getRequest() + ": " + ex, ex );
         }
@@ -69,11 +85,11 @@ public class CliCommandAction extends AbstractStatefulAction {
         
         // ... act as per configuration.
         switch( this.ifExists ){
-            case OVERWRITE: todo = OVERWRITE; break;                    
+            case OVERWRITE: this.todo = OVERWRITE; break;                    
             case FAIL:  throw new ActionException(this, "ModelNode already exists in AS 7 config: " + this.command.getCommand() );
             case MERGE: throw new UnsupportedOperationException("ModelNode merging not supported yet. MIGR-61");
-            case WARN:  todo = SKIP; log.warn("ModelNode already exists in AS 7 config: " + this.command.getCommand() ); return;
-            case SKIP:  todo = SKIP; return;
+            case WARN:  this.todo = SKIP; log.warn("ModelNode already exists in AS 7 config: " + this.command.getCommand() ); return;
+            case SKIP:  this.todo = SKIP; return;
             case ASK:   throw new UnsupportedOperationException("Interactive duplicity handling not supported yet. MIGR-62");
         }
     }// preValidate()
@@ -81,11 +97,13 @@ public class CliCommandAction extends AbstractStatefulAction {
 
     @Override
     public void perform() throws MigrationException {
-        if( todo == SKIP )  return;
-        if( todo == OVERWRITE ){
+        if( this.todo == SKIP )  return;
+        if( this.todo == OVERWRITE ){
             // Remove the pre-existing node.
             ModelNode remCmd = AS7CliUtils.createRemoveCommandForResource( this.command.getRequest() );
-            getMigrationContext().getBatch().add( new BatchedCommandWithAction( this, remCmd.asString(), remCmd) );
+            //log.debug("\n    Adding REMOVE operation: " + remCmd);
+            String desc = AS7CliUtils.formatCommand( remCmd ); //remCmd.asString();
+            getMigrationContext().getBatch().add( new BatchedCommandWithAction( this, desc, remCmd) );
         }
         
         // Perform.
@@ -127,11 +145,17 @@ public class CliCommandAction extends AbstractStatefulAction {
     public void setCommand( BatchedCommand command ) { this.command = new BatchedCommandWithAction( this, command ); }
     public Configuration.IfExists getIfExists() { return ifExists; }
     public CliCommandAction setIfExists( Configuration.IfExists ifExists ) { this.ifExists = ifExists; return this; }
-
-
     //</editor-fold>
     
-    
+
+    /*
+     *  Workaround until MIGR-128.
+     *  TODO: Rename getCommand() to getBatchCommand() and this to getCommand().
+     */
+    @Property(name = "cliCommand", style = "code")
+    public String getCommandCommand(){
+        return this.command.getCommand();
+    }
     
     @Override
     public String toString() {

@@ -1,7 +1,7 @@
 package org.jboss.loom;
 
 import org.jboss.loom.MigratorApp;
-import org.jboss.loom.MigratorEngine;
+import org.jboss.loom.MigrationEngine;
 import org.jboss.loom.conf.Configuration;
 import org.apache.commons.io.FileUtils;
 import org.junit.*;
@@ -9,6 +9,7 @@ import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
+import org.jboss.loom.conf.ConfigurationValidator;
 
 /**
  *
@@ -66,10 +67,10 @@ public class MigratorEngineTest {
         System.out.println( "doMigration" );
         
         Configuration conf = createTestConfig01();
-        MigratorApp.validateConfiguration( conf );
+        ConfigurationValidator.validate( conf );
         
         //MigratorApp.migrate( conf );
-        MigratorEngine migrator = new MigratorEngine(conf);
+        MigrationEngine migrator = new MigrationEngine(conf);
         migrator.doMigration();
     }
 

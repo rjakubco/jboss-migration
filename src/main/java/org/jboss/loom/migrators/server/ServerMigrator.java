@@ -1,12 +1,18 @@
+/**
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0 .
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
+ * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and limitations under the License.
+ */
 package org.jboss.loom.migrators.server;
 
-import org.apache.commons.collections.map.MultiValueMap;
 import org.jboss.as.controller.client.helpers.ClientConstants;
 import org.jboss.dmr.ModelNode;
-import org.jboss.loom.CliAddScriptBuilder;
-import org.jboss.loom.CliApiCommandBuilder;
-import org.jboss.loom.MigrationContext;
-import org.jboss.loom.MigrationData;
+import org.jboss.loom.utils.as7.CliAddScriptBuilder;
+import org.jboss.loom.utils.as7.CliApiCommandBuilder;
+import org.jboss.loom.ctx.MigrationContext;
+import org.jboss.loom.ctx.MigratorData;
 import org.jboss.loom.actions.CliCommandAction;
 import org.jboss.loom.actions.CopyFileAction;
 import org.jboss.loom.conf.GlobalConfiguration;
@@ -27,13 +33,17 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.util.LinkedList;
 import java.util.List;
+import org.jboss.loom.spi.ann.ConfigPartDescriptor;
 
 /**
  * Migrator of server subsystem implementing IMigrator.
  *
  * @author Roman Jakubco
  */
-
+@ConfigPartDescriptor(
+    name = "JBoss Web configuration"
+    //, docLink = "https://docs.jboss.org/author/display/AS72/Logging+Configuration"
+)
 public class ServerMigrator extends AbstractMigrator {
 
     @Override
@@ -44,12 +54,12 @@ public class ServerMigrator extends AbstractMigrator {
     private static final String AS7_CONFIG_DIR_PLACEHOLDER = "${jboss.server.config.dir}";
     private static final Logger log = LoggerFactory.getLogger(ServerMigrator.class);
 
-    public ServerMigrator(GlobalConfiguration globalConfig, MultiValueMap config) {
-        super(globalConfig, config);
+    public ServerMigrator(GlobalConfiguration globalConfig) {
+        super(globalConfig);
     }
 
     @Override
-    public void loadAS5Data(MigrationContext ctx) throws LoadMigrationException {
+    public void loadSourceServerConfig(MigrationContext ctx) throws LoadMigrationException {
 
         // TBC: Maybe use FileUtils and list all files with that name?
         File file = Utils.createPath(
@@ -65,7 +75,7 @@ public class ServerMigrator extends AbstractMigrator {
 
             ServerAS5Bean serverAS5 = (ServerAS5Bean) unmarshaller.unmarshal(file);
 
-            MigrationData mData = new MigrationData();
+            MigratorData mData = new MigratorData();
             for (ServiceBean s : serverAS5.getServices()) {
                 mData.getConfigFragments().add(s.getEngine());
                 mData.getConfigFragments().addAll(s.getConnectorAS5s());
@@ -342,18 +352,18 @@ public class ServerMigrator extends AbstractMigrator {
 
         CliApiCommandBuilder builder = new CliApiCommandBuilder(connCmd);
 
-        builder.addProperty("socket-binding", connAS7.getSocketBinding());
-        builder.addProperty("enable-lookups", connAS7.getEnableLookups());
-        builder.addProperty("max-post-size", connAS7.getMaxPostSize());
-        builder.addProperty("max-save-post-size", connAS7.getMaxSavePostSize());
-        builder.addProperty("max-connections", connAS7.getMaxConnections());
-        builder.addProperty("protocol", connAS7.getProtocol());
-        builder.addProperty("proxy-name", connAS7.getProxyName());
-        builder.addProperty("proxy-port", connAS7.getProxyPort());
-        builder.addProperty("redirect-port", connAS7.getRedirectPort());
-        builder.addProperty("scheme", connAS7.getScheme());
-        builder.addProperty("secure", connAS7.getSecure());
-        builder.addProperty("enabled", connAS7.getEnabled());
+        builder.addPropertyIfSet("socket-binding", connAS7.getSocketBinding());
+        builder.addPropertyIfSet("enable-lookups", connAS7.getEnableLookups());
+        builder.addPropertyIfSet("max-post-size", connAS7.getMaxPostSize());
+        builder.addPropertyIfSet("max-save-post-size", connAS7.getMaxSavePostSize());
+        builder.addPropertyIfSet("max-connections", connAS7.getMaxConnections());
+        builder.addPropertyIfSet("protocol", connAS7.getProtocol());
+        builder.addPropertyIfSet("proxy-name", connAS7.getProxyName());
+        builder.addPropertyIfSet("proxy-port", connAS7.getProxyPort());
+        builder.addPropertyIfSet("redirect-port", connAS7.getRedirectPort());
+        builder.addPropertyIfSet("scheme", connAS7.getScheme());
+        builder.addPropertyIfSet("secure", connAS7.getSecure());
+        builder.addPropertyIfSet("enabled", connAS7.getEnabled());
         return builder.getCommand();
     }
     
@@ -366,17 +376,17 @@ public class ServerMigrator extends AbstractMigrator {
 
         CliApiCommandBuilder sslBuilder = new CliApiCommandBuilder(sslConf);
 
-        sslBuilder.addProperty("name", connAS7.getSslName());
-        sslBuilder.addProperty("verify-client", connAS7.getVerifyClient());
-        sslBuilder.addProperty("verify-depth", connAS7.getVerifyDepth());
-        sslBuilder.addProperty("certificate-key-file", connAS7.getCertifKeyFile());
-        sslBuilder.addProperty("password", connAS7.getPassword());
-        sslBuilder.addProperty("protocol", connAS7.getSslProtocol());
-        sslBuilder.addProperty("ciphers", connAS7.getCiphers());
-        sslBuilder.addProperty("key-alias", connAS7.getKeyAlias());
-        sslBuilder.addProperty("ca-certificate-file", connAS7.getCaCertifFile());
-        sslBuilder.addProperty("session-cache-size", connAS7.getSessionCacheSize());
-        sslBuilder.addProperty("session-timeout", connAS7.getSessionTimeout());
+        sslBuilder.addPropertyIfSet("name", connAS7.getSslName());
+        sslBuilder.addPropertyIfSet("verify-client", connAS7.getVerifyClient());
+        sslBuilder.addPropertyIfSet("verify-depth", connAS7.getVerifyDepth());
+        sslBuilder.addPropertyIfSet("certificate-key-file", connAS7.getCertifKeyFile());
+        sslBuilder.addPropertyIfSet("password", connAS7.getPassword());
+        sslBuilder.addPropertyIfSet("protocol", connAS7.getSslProtocol());
+        sslBuilder.addPropertyIfSet("ciphers", connAS7.getCiphers());
+        sslBuilder.addPropertyIfSet("key-alias", connAS7.getKeyAlias());
+        sslBuilder.addPropertyIfSet("ca-certificate-file", connAS7.getCaCertifFile());
+        sslBuilder.addPropertyIfSet("session-cache-size", connAS7.getSessionCacheSize());
+        sslBuilder.addPropertyIfSet("session-timeout", connAS7.getSessionTimeout());
         return sslBuilder.getCommand();
     }
     
@@ -411,8 +421,8 @@ public class ServerMigrator extends AbstractMigrator {
 
         CliApiCommandBuilder builder = new CliApiCommandBuilder(serverCmd);
 
-        builder.addProperty("enable-welcome-root", server.getEnableWelcomeRoot());
-        builder.addProperty("default-web-module", server.getDefaultWebModule());
+        builder.addPropertyIfSet("enable-welcome-root", server.getEnableWelcomeRoot());
+        builder.addPropertyIfSet("default-web-module", server.getDefaultWebModule());
 
         return new CliCommandAction( ServerMigrator.class, createVirtualServerScript(server), builder.getCommand());
     }
@@ -438,7 +448,7 @@ public class ServerMigrator extends AbstractMigrator {
         serverCmd.get("port").set(socket.getSocketPort());
 
         CliApiCommandBuilder builder = new CliApiCommandBuilder(serverCmd);
-        builder.addProperty("interface", socket.getSocketInterface());
+        builder.addPropertyIfSet("interface", socket.getSocketInterface());
 
         return new CliCommandAction( ServerMigrator.class, createSocketBindingScript(socket), builder.getCommand());
     }

@@ -6,7 +6,7 @@
 
     <groupId>org.jboss.migr.as</groupId>
     <artifactId>AsMigrator</artifactId>
-    <version>0.9.0</version>
+    <version>0.10.4</version>
 
     <parent>
         <groupId>org.jboss</groupId>
@@ -20,7 +20,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         
         <!-- User input defaults -->
-        <download>as7</download> <!-- "as7" or "eap6" -->
+        <download>eap6</download> <!-- "as7" or "eap6" -->
         
         <!-- Build flow control -->
         <as.jvm.args></as.jvm.args>
@@ -33,6 +33,10 @@
                 <directory>src/main/java</directory>
                 <filtering>false</filtering>
                 <excludes> <exclude>**/*.java</exclude> </excludes>
+            </resource>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>false</filtering>
             </resource>
         </resources>
         <testResources>
@@ -92,14 +96,14 @@
                             </descriptorRefs>
                             <archive>
                                 <manifest>
-                                    <mainClass>cz.muni.fi.jboss.migration.MigratorApp</mainClass>
+                                    <mainClass>org.jboss.loom.MigratorApp</mainClass>
                                 </manifest>
                             </archive>
                         </configuration>
                     </execution>
                 </executions>
             </plugin>
-            <!-- Download AS 7 for Arquillian tests. -->
+            <!-- Download AS 7 for Arquillian tests. 
             <plugin>
                 <artifactId>maven-dependency-plugin</artifactId>
                 <executions>
@@ -120,14 +124,11 @@
                     </execution>
                 </executions>
             </plugin>
+            -->
         </plugins>
     </build>
     
     <repositories>
-        <repository>
-            <id>EclipseLink</id>
-            <url>http://download.eclipse.org/rt/eclipselink/maven.repo</url>
-        </repository>
         <repository>
             <id>JBoss</id>
             <url>http://repository.jboss.org/nexus/content/groups/public</url>
@@ -137,25 +138,37 @@
     <profiles>
         <!-- Download AS or EAP for Arquillian tests. -->
         <profile>  <id>DownloadContainer</id>
-            <activation> <property> <name>download</name> </property> </activation>
+            <activation> 
+                <activeByDefault>true</activeByDefault> 
+                <property>  <name>download</name>  </property> 
+            </activation>
             <build>
                 <plugins>
                     <plugin>
                         <artifactId>maven-dependency-plugin</artifactId>
                         <executions>
-                            <execution> <id>get-AS7</id> <phase>process-test-classes</phase>
-                                <goals> <goal>unpack</goal> </goals>
+                            <execution> <id>as-dist.download</id> <phase>process-test-classes</phase>
+                                <goals> <goal>get</goal> </goals>
                                 <configuration>
-                                    <artifactItems>
-                                        <artifactItem>
-                                            <groupId>org.jboss.as</groupId>
-                                            <artifactId>jboss-as-dist</artifactId>
-                                            <version>${as.download.version}</version>
-                                            <type>zip</type>
-                                            <overWrite>false</overWrite>
-                                            <outputDirectory>target</outputDirectory>
-                                        </artifactItem>
-                                    </artifactItems>
+                                    <artifact>org.jboss.as:jboss-as-dist:${as.download.version}:zip</artifact>
+                                    <destination>target</destination>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <artifactId>maven-antrun-plugin</artifactId>
+                        <version>1.7</version>
+                        <executions>
+                            <execution>  <id>as-dist.unzip</id>
+                                <phase>process-test-classes</phase>
+                                <goals> <goal>run</goal> </goals>
+                                <configuration>
+                                    <target>
+                                        <unzip src="target/jboss-as-dist-${as.download.version}.zip" dest="target/as-dist">
+                                            <cutdirsmapper dirs="1"/>
+                                        </unzip>
+                                    </target>
                                 </configuration>
                             </execution>
                         </executions>
@@ -181,7 +194,10 @@
         
         <!-- Download EAP 6 for Arquillian tests. -->
         <profile>  <id>DownloadEAP</id>
-            <activation> <property> <name>download</name> <value>eap6</value> </property> </activation>
+            <activation>
+                <property> <name>download</name> <value>eap6</value> </property> 
+                <activeByDefault>true</activeByDefault>
+            </activation>
             <repositories>
                 <repository>
                     <id>RedHat</id>
@@ -193,6 +209,49 @@
                 <arq.asContainer.version>7.2.0.Final</arq.asContainer.version>
             </properties>
         </profile>
+
+        <!-- License headers. -->
+        <profile> <id>Headers</id>
+            <activation> <property> <name>headers</name> </property> </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>com.mycila.maven-license-plugin</groupId>
+                        <artifactId>maven-license-plugin</artifactId>
+                        <version>1.10.b1</version>
+                        <configuration>
+                            <header>src/main/licenseHeader.txt</header>
+                            <includes>
+                                <include>src/main/**/*.java</include>
+                            </includes>
+                            <excludes>
+                                <exclude>src/main/**/I*.java</exclude>
+                            </excludes>
+                            <!-- We already have comment stars.
+                            <mapping>
+                                <java>PLAIN</java>
+                            </mapping>
+                            <headerDefinitions>
+                                <headerDefinition>
+                                    
+                                </headerDefinition>
+                            </headerDefinitions>
+                            -->
+                            <properties>
+                                <year>2013</year>
+                            </properties>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>    
+            <pluginRepositories>
+                <pluginRepository>
+                    <id>mc-release</id>
+                    <name>Local Maven repository of releases</name>
+                    <url>http://mc-repo.googlecode.com/svn/maven2/releases</url>
+                </pluginRepository>
+            </pluginRepositories>  
+        </profile>
     </profiles>
 
     <dependencies>
@@ -201,7 +260,7 @@
         <dependency>
             <groupId>org.eclipse.persistence</groupId>
             <artifactId>org.eclipse.persistence.moxy</artifactId>
-            <version>2.4.0</version>
+            <version>2.5.0</version>
             <scope>compile</scope>
         </dependency>
 
@@ -228,6 +287,48 @@
             <artifactId>commons-collections</artifactId>
             <version>3.2.1</version>
         </dependency>
+        <!--
+        <dependency>
+            <groupId>commons-codec</groupId>
+            <artifactId>commons-codec</artifactId>
+            <version>1.8</version>
+        </dependency>
+        -->
+        <dependency>
+            <groupId>commons-beanutils</groupId>
+            <artifactId>commons-beanutils-core</artifactId>
+            <version>1.8.3</version>
+        </dependency>
+
+        <!-- Expression language -->
+        <!--
+        <dependency>
+            <groupId>commons-el</groupId>
+            <artifactId>commons-el</artifactId>
+            <version>1.0</version>
+        </dependency>
+        <dependency>
+            <groupId>javax.el</groupId>
+            <artifactId>javax.el-api</artifactId>
+            <version>2.2.4</version>
+            <type>jar</type>
+        </dependency>
+        <dependency>
+            <groupId>juel</groupId>
+            <artifactId>juel</artifactId>
+            <version>2.2.1</version>
+            <type>jar</type>
+        </dependency>
+        -->
+
+        <!-- XSLT 2.0 - but breaks non-namespaced XPath :/ Needs to be only used for reporting. -->
+        <dependency>
+            <groupId>net.sf.saxon</groupId>
+            <artifactId>Saxon-HE</artifactId>
+            <version>9.5.0.2</version>
+        </dependency>
+        
+        
 
         <!-- Logging -->
         <dependency>
@@ -264,6 +365,12 @@
             <artifactId>jboss-as-arquillian-container-managed</artifactId>
             <version>${arq.asContainer.version}</version>
             <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <artifactId>jbosgi-spi</artifactId>
+                    <groupId>org.jboss.osgi.spi</groupId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <!--
@@ -278,6 +385,22 @@
             <version>1.1.4</version>
         </dependency>
         -->
+        
+        <!-- For unzipping and CRC32 -->
+        <dependency>
+            <groupId>net.lingala.zip4j</groupId>
+            <artifactId>zip4j</artifactId>
+            <version>1.3.1</version>
+        </dependency>
+        
+        <!-- For DirectorySanner. -->
+        <dependency>
+            <groupId>org.apache.ant</groupId>
+            <artifactId>ant</artifactId>
+            <version>1.8.2</version>
+            <type>jar</type>
+            <exclusions> <exclusion> <artifactId>ant-launcher</artifactId> <groupId>org.apache.ant</groupId> </exclusion> </exclusions>
+        </dependency>
     </dependencies>
     
     <dependencyManagement>

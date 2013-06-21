@@ -1,16 +1,22 @@
+/**
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0 .
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
+ * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and limitations under the License.
+ */
 package org.jboss.loom.migrators.dataSources;
 
-import org.apache.commons.collections.map.MultiValueMap;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.filefilter.FileFilterUtils;
 import org.apache.commons.io.filefilter.SuffixFileFilter;
 import org.apache.commons.lang.StringUtils;
 import org.jboss.as.controller.client.helpers.ClientConstants;
 import org.jboss.dmr.ModelNode;
-import org.jboss.loom.CliAddScriptBuilder;
-import org.jboss.loom.CliApiCommandBuilder;
-import org.jboss.loom.MigrationContext;
-import org.jboss.loom.MigrationData;
+import org.jboss.loom.utils.as7.CliAddScriptBuilder;
+import org.jboss.loom.utils.as7.CliApiCommandBuilder;
+import org.jboss.loom.ctx.MigrationContext;
+import org.jboss.loom.ctx.MigratorData;
 import org.jboss.loom.actions.CliCommandAction;
 import org.jboss.loom.actions.IMigrationAction;
 import org.jboss.loom.actions.ModuleCreationAction;
@@ -36,13 +42,18 @@ import javax.xml.bind.Unmarshaller;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
+import org.jboss.loom.spi.ann.ConfigPartDescriptor;
+import org.jboss.loom.utils.XmlUtils;
 
 /**
  * Migrator of Datasource subsystem implementing IMigrator
  *
  * @author Roman Jakubco
  */
-
+@ConfigPartDescriptor(
+    name = "Datasources configuration",
+    docLink = "https://access.redhat.com/site/documentation/en-US/JBoss_Enterprise_Application_Platform/5/html-single/Administration_And_Configuration_Guide/index.html#datasource-config"
+)
 public class DatasourceMigrator extends AbstractMigrator {
     private static final Logger log = LoggerFactory.getLogger(DatasourceMigrator.class);
     
@@ -56,13 +67,13 @@ public class DatasourceMigrator extends AbstractMigrator {
 
     
 
-    public DatasourceMigrator(GlobalConfiguration globalConfig, MultiValueMap config) {
-        super(globalConfig, config);
+    public DatasourceMigrator(GlobalConfiguration globalConfig) {
+        super(globalConfig);
 
     }
 
     @Override
-    public void loadAS5Data(MigrationContext ctx) throws LoadMigrationException {
+    public void loadSourceServerConfig(MigrationContext ctx) throws LoadMigrationException {
         try {
 
             // Get a list of -ds.xml files.
@@ -80,7 +91,7 @@ public class DatasourceMigrator extends AbstractMigrator {
             Unmarshaller dataUnmarshaller = JAXBContext.newInstance(DatasourcesBean.class).createUnmarshaller();
             
             for( File dsXml : dsXmls ) {
-                Document doc = Utils.parseFileToXmlDoc( dsXml );
+                Document doc = XmlUtils.parseFileToXmlDoc( dsXml );
                 Element element = doc.getDocumentElement();
                 if( DATASOURCES_ROOT_ELEMENT_NAME.equals( element.getTagName() )){
                     DatasourcesBean dataSources = (DatasourcesBean) dataUnmarshaller.unmarshal(dsXml);
@@ -88,7 +99,7 @@ public class DatasourceMigrator extends AbstractMigrator {
                 }
             }
 
-            MigrationData mData = new MigrationData();
+            MigratorData mData = new MigratorData();
 
             for (DatasourcesBean ds : dsColl) {
                 if (ds.getLocalDatasourceAS5s() != null) {
@@ -388,44 +399,44 @@ public class DatasourceMigrator extends AbstractMigrator {
         request.get(ClientConstants.OP_ADDR).add("data-source", dataSource.getPoolName());
 
         CliApiCommandBuilder builder = new CliApiCommandBuilder(request);
-        builder.addProperty("jndi-name", dataSource.getJndiName());
+        builder.addPropertyIfSet("jndi-name", dataSource.getJndiName());
 
         // TODO: Try if property enabled works
-        builder.addProperty("enabled", "true");
+        builder.addPropertyIfSet("enabled", "true");
 
-        builder.addProperty("driver-name", dataSource.getDriver());
+        builder.addPropertyIfSet("driver-name", dataSource.getDriver());
         
-        builder.addProperty("jta", dataSource.getJta());
-        builder.addProperty("use-java-context", dataSource.getUseJavaContext());
-        builder.addProperty("connection-url", dataSource.getConnectionUrl());
-        builder.addProperty("url-delimeter", dataSource.getUrlDelimeter());
-        builder.addProperty("url-selector-strategy-class-name", dataSource.getUrlSelector());
-        builder.addProperty("transaction-isolation", dataSource.getTransIsolation());
-        builder.addProperty("new-connection-sql", dataSource.getNewConnectionSql());
-        builder.addProperty("prefill", dataSource.getPrefill());
-        builder.addProperty("min-pool-size", dataSource.getMinPoolSize());
-        builder.addProperty("max-pool-size", dataSource.getMaxPoolSize());
-        builder.addProperty("password", dataSource.getPassword());
-        builder.addProperty("user-name", dataSource.getUserName());
-        builder.addProperty("security-domain", dataSource.getSecurityDomain());
-        builder.addProperty("check-valid-connection-sql", dataSource.getCheckValidConSql());
-        builder.addProperty("validate-on-match", dataSource.getValidateOnMatch());
-        builder.addProperty("background-validation", dataSource.getBackgroundValid());
-        builder.addProperty("background-validation-minutes", dataSource.getBackgroundValidMin());
-        builder.addProperty("use-fast-fail", dataSource.getUseFastFail());
-        builder.addProperty("exception-sorter-class-name", dataSource.getExceptionSorter());
-        builder.addProperty("valid-connection-checker-class-name", dataSource.getValidateOnMatch());
-        builder.addProperty("stale-connection-checker-class-name", dataSource.getStaleConChecker());
-        builder.addProperty("blocking-timeout-millis", dataSource.getBlockingTimeoutMillis());
-        builder.addProperty("idle-timeout-minutes", dataSource.getIdleTimeoutMin());
-        builder.addProperty("set-tx-query-timeout", dataSource.getSetTxQueryTimeout());
-        builder.addProperty("query-timeout", dataSource.getQueryTimeout());
-        builder.addProperty("allocation-retry", dataSource.getAllocationRetry());
-        builder.addProperty("allocation-retry-wait-millis", dataSource.getAllocRetryWaitMillis());
-        builder.addProperty("use-try-lock", dataSource.getUseTryLock());
-        builder.addProperty("prepared-statement-cache-size", dataSource.getPreStatementCacheSize());
-        builder.addProperty("track-statements", dataSource.getTrackStatements());
-        builder.addProperty("share-prepared-statements", dataSource.getSharePreStatements());
+        builder.addPropertyIfSet("jta", dataSource.getJta());
+        builder.addPropertyIfSet("use-java-context", dataSource.getUseJavaContext());
+        builder.addPropertyIfSet("connection-url", dataSource.getConnectionUrl());
+        builder.addPropertyIfSet("url-delimeter", dataSource.getUrlDelimeter());
+        builder.addPropertyIfSet("url-selector-strategy-class-name", dataSource.getUrlSelector());
+        builder.addPropertyIfSet("transaction-isolation", dataSource.getTransIsolation());
+        builder.addPropertyIfSet("new-connection-sql", dataSource.getNewConnectionSql());
+        builder.addPropertyIfSet("prefill", dataSource.getPrefill());
+        builder.addPropertyIfSet("min-pool-size", dataSource.getMinPoolSize());
+        builder.addPropertyIfSet("max-pool-size", dataSource.getMaxPoolSize());
+        builder.addPropertyIfSet("password", dataSource.getPassword());
+        builder.addPropertyIfSet("user-name", dataSource.getUserName());
+        builder.addPropertyIfSet("security-domain", dataSource.getSecurityDomain());
+        builder.addPropertyIfSet("check-valid-connection-sql", dataSource.getCheckValidConSql());
+        builder.addPropertyIfSet("validate-on-match", dataSource.getValidateOnMatch());
+        builder.addPropertyIfSet("background-validation", dataSource.getBackgroundValid());
+        builder.addPropertyIfSet("background-validation-minutes", dataSource.getBackgroundValidMin());
+        builder.addPropertyIfSet("use-fast-fail", dataSource.getUseFastFail());
+        builder.addPropertyIfSet("exception-sorter-class-name", dataSource.getExceptionSorter());
+        builder.addPropertyIfSet("valid-connection-checker-class-name", dataSource.getValidateOnMatch());
+        builder.addPropertyIfSet("stale-connection-checker-class-name", dataSource.getStaleConChecker());
+        builder.addPropertyIfSet("blocking-timeout-millis", dataSource.getBlockingTimeoutMillis());
+        builder.addPropertyIfSet("idle-timeout-minutes", dataSource.getIdleTimeoutMin());
+        builder.addPropertyIfSet("set-tx-query-timeout", dataSource.getSetTxQueryTimeout());
+        builder.addPropertyIfSet("query-timeout", dataSource.getQueryTimeout());
+        builder.addPropertyIfSet("allocation-retry", dataSource.getAllocationRetry());
+        builder.addPropertyIfSet("allocation-retry-wait-millis", dataSource.getAllocRetryWaitMillis());
+        builder.addPropertyIfSet("use-try-lock", dataSource.getUseTryLock());
+        builder.addPropertyIfSet("prepared-statement-cache-size", dataSource.getPreStatementCacheSize());
+        builder.addPropertyIfSet("track-statements", dataSource.getTrackStatements());
+        builder.addPropertyIfSet("share-prepared-statements", dataSource.getSharePreStatements());
         return builder.getCommand();
     }
 
@@ -471,41 +482,41 @@ public class DatasourceMigrator extends AbstractMigrator {
 
         CliApiCommandBuilder builder = new CliApiCommandBuilder(request);
 
-        builder.addProperty("jndi-name", dataSource.getJndiName());
-        builder.addProperty("use-java-context", dataSource.getUseJavaContext());
-        builder.addProperty("driver-name", dataSource.getDriver());
-        builder.addProperty("url-delimeter", dataSource.getUrlDelimeter());
-        builder.addProperty("url-selector-strategy-class-name", dataSource.getUrlSelector());
-        builder.addProperty("transaction-isolation", dataSource.getTransIsolation());
-        builder.addProperty("new-connection-sql", dataSource.getNewConnectionSql());
-        builder.addProperty("prefill", dataSource.getPrefill());
-        builder.addProperty("min-pool-size", dataSource.getMinPoolSize());
-        builder.addProperty("max-pool-size", dataSource.getMaxPoolSize());
-        builder.addProperty("is-same-rm-override", dataSource.getSameRmOverride());
-        builder.addProperty("interleaving", dataSource.getInterleaving());
-        builder.addProperty("no-tx-separate-pools", dataSource.getNoTxSeparatePools());
-        builder.addProperty("password", dataSource.getPassword());
-        builder.addProperty("user-name", dataSource.getUserName());
-        builder.addProperty("security-domain", dataSource.getSecurityDomain());
-        builder.addProperty("check-valid-connection-sql", dataSource.getCheckValidConSql());
-        builder.addProperty("validate-on-match", dataSource.getValidateOnMatch());
-        builder.addProperty("background-validation", dataSource.getBackgroundValid());
-        builder.addProperty("background-validation-minutes", dataSource.getBackgroundValidMin());
-        builder.addProperty("use-fast-fail", dataSource.getUseFastFail());
-        builder.addProperty("exception-sorter-class-name", dataSource.getExceptionSorter());
-        builder.addProperty("valid-connection-checker-class-name", dataSource.getValidateOnMatch());
-        builder.addProperty("stale-connection-checker-class-name", dataSource.getStaleConChecker());
-        builder.addProperty("blocking-timeout-millis", dataSource.getBlockingTimeoutMillis());
-        builder.addProperty("idle-timeout-minutes", dataSource.getIdleTimeoutMin());
-        builder.addProperty("set-tx-query-timeout", dataSource.getSetTxQueryTimeout());
-        builder.addProperty("query-timeout", dataSource.getQueryTimeout());
-        builder.addProperty("allocation-retry", dataSource.getAllocationRetry());
-        builder.addProperty("allocation-retry-wait-millis", dataSource.getAllocRetryWaitMillis());
-        builder.addProperty("use-try-lock", dataSource.getUseTryLock());
-        builder.addProperty("xa-resource-timeout", dataSource.getXaResourceTimeout());
-        builder.addProperty("prepared-statement-cache-size", dataSource.getPreStatementCacheSize());
-        builder.addProperty("track-statements", dataSource.getTrackStatements());
-        builder.addProperty("share-prepared-statements", dataSource.getSharePreStatements());
+        builder.addPropertyIfSet("jndi-name", dataSource.getJndiName());
+        builder.addPropertyIfSet("use-java-context", dataSource.getUseJavaContext());
+        builder.addPropertyIfSet("driver-name", dataSource.getDriver());
+        builder.addPropertyIfSet("url-delimeter", dataSource.getUrlDelimeter());
+        builder.addPropertyIfSet("url-selector-strategy-class-name", dataSource.getUrlSelector());
+        builder.addPropertyIfSet("transaction-isolation", dataSource.getTransIsolation());
+        builder.addPropertyIfSet("new-connection-sql", dataSource.getNewConnectionSql());
+        builder.addPropertyIfSet("prefill", dataSource.getPrefill());
+        builder.addPropertyIfSet("min-pool-size", dataSource.getMinPoolSize());
+        builder.addPropertyIfSet("max-pool-size", dataSource.getMaxPoolSize());
+        builder.addPropertyIfSet("is-same-rm-override", dataSource.getSameRmOverride());
+        builder.addPropertyIfSet("interleaving", dataSource.getInterleaving());
+        builder.addPropertyIfSet("no-tx-separate-pools", dataSource.getNoTxSeparatePools());
+        builder.addPropertyIfSet("password", dataSource.getPassword());
+        builder.addPropertyIfSet("user-name", dataSource.getUserName());
+        builder.addPropertyIfSet("security-domain", dataSource.getSecurityDomain());
+        builder.addPropertyIfSet("check-valid-connection-sql", dataSource.getCheckValidConSql());
+        builder.addPropertyIfSet("validate-on-match", dataSource.getValidateOnMatch());
+        builder.addPropertyIfSet("background-validation", dataSource.getBackgroundValid());
+        builder.addPropertyIfSet("background-validation-minutes", dataSource.getBackgroundValidMin());
+        builder.addPropertyIfSet("use-fast-fail", dataSource.getUseFastFail());
+        builder.addPropertyIfSet("exception-sorter-class-name", dataSource.getExceptionSorter());
+        builder.addPropertyIfSet("valid-connection-checker-class-name", dataSource.getValidateOnMatch());
+        builder.addPropertyIfSet("stale-connection-checker-class-name", dataSource.getStaleConChecker());
+        builder.addPropertyIfSet("blocking-timeout-millis", dataSource.getBlockingTimeoutMillis());
+        builder.addPropertyIfSet("idle-timeout-minutes", dataSource.getIdleTimeoutMin());
+        builder.addPropertyIfSet("set-tx-query-timeout", dataSource.getSetTxQueryTimeout());
+        builder.addPropertyIfSet("query-timeout", dataSource.getQueryTimeout());
+        builder.addPropertyIfSet("allocation-retry", dataSource.getAllocationRetry());
+        builder.addPropertyIfSet("allocation-retry-wait-millis", dataSource.getAllocRetryWaitMillis());
+        builder.addPropertyIfSet("use-try-lock", dataSource.getUseTryLock());
+        builder.addPropertyIfSet("xa-resource-timeout", dataSource.getXaResourceTimeout());
+        builder.addPropertyIfSet("prepared-statement-cache-size", dataSource.getPreStatementCacheSize());
+        builder.addPropertyIfSet("track-statements", dataSource.getTrackStatements());
+        builder.addPropertyIfSet("share-prepared-statements", dataSource.getSharePreStatements());
         
         return builder.getCommand();
     }
@@ -568,12 +579,12 @@ public class DatasourceMigrator extends AbstractMigrator {
 
         CliApiCommandBuilder builder = new CliApiCommandBuilder(request);
 
-        builder.addProperty("driver-name", driver.getDriverModule());
-        builder.addProperty("driver-module-name", driver.getDriverModule());
-        builder.addProperty("driver-class-name", driver.getDriverClass());
-        builder.addProperty("driver-xa-datasource-class-name", driver.getXaDatasourceClass());
-        builder.addProperty("driver-major-version", driver.getMajorVersion());
-        builder.addProperty("driver-minor-version", driver.getMinorVersion());
+        builder.addPropertyIfSet("driver-name", driver.getDriverModule());
+        builder.addPropertyIfSet("driver-module-name", driver.getDriverModule());
+        builder.addPropertyIfSet("driver-class-name", driver.getDriverClass());
+        builder.addPropertyIfSet("driver-xa-datasource-class-name", driver.getXaDatasourceClass());
+        builder.addPropertyIfSet("driver-major-version", driver.getMajorVersion());
+        builder.addPropertyIfSet("driver-minor-version", driver.getMinorVersion());
         
         return builder.getCommand();
     }    

@@ -1,3 +1,10 @@
+/**
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0 .
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
+ * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and limitations under the License.
+ */
 package org.jboss.loom.utils;
 
 import org.jboss.loom.ex.CliScriptException;
@@ -8,25 +15,25 @@ import org.apache.commons.io.filefilter.IOFileFilter;
 import org.apache.commons.io.filefilter.NameFileFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.w3c.dom.Document;
-import org.xml.sax.SAXException;
-
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
-import javax.xml.transform.OutputKeys;
-import javax.xml.transform.Transformer;
-import javax.xml.transform.TransformerException;
-import javax.xml.transform.TransformerFactory;
-import javax.xml.transform.dom.DOMSource;
-import javax.xml.transform.stream.StreamResult;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.Collection;
 import java.util.Enumeration;
+import java.util.LinkedHashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
+import org.apache.commons.io.DirectoryWalker;
+import org.apache.commons.lang.StringUtils;
+import org.jboss.loom.spi.IConfigFragment;
+import org.jboss.loom.tools.report.Reporter;
 
 /**
  * Global utils class.
@@ -36,7 +43,7 @@ import java.util.jar.JarFile;
 public class Utils {
     private static final Logger log = LoggerFactory.getLogger(Utils.class);
 
-
+    
     /**
      * Method for testing if given string is null or empty and if it is then CliScriptException is thrown with given message
      *
@@ -57,9 +64,15 @@ public class Utils {
      */
     public static void writeHelp() {
         System.out.println();
+        System.out.println(" JBoss configuration migration tool for AS 5 / EAP 5 -> AS 7 / EAP 6 / WildFly 8");
+        System.out.println();
         System.out.println(" Usage:");
         System.out.println();
         System.out.println("    java -jar AsMigrator.jar [<option>, ...] [as5.dir=]<as5.dir> [as7.dir=]<as7.dir>");
+        System.out.println();
+        System.out.println("       <as5.dir>   is expected to contain path to AS 5 or EAP 5 home directory, i.e. the one with server/ subdirectory.");
+        System.out.println();
+        System.out.println("       <as7.dir>   is expected to contain path to AS 7 or EAP 6 home directory, i.e. the one with jboss-modules.jar.");
         System.out.println();
         System.out.println(" Options:");
         System.out.println();
@@ -111,7 +124,7 @@ public class Utils {
     }
 
     private static File lookForJarWithAClass(File dir, String classFilePath) throws IOException {
-        log.debug("    Looking in " +  dir.getPath() + " for a .jar with: " + classFilePath);
+        log.debug("    Looking in " +  dir.getPath() + " for a .jar with: " + classFilePath.replace('/', '.'));
         if( ! dir.isDirectory() ){
             log.trace("    Not a directory: " +  dir.getPath());
             return null;
@@ -148,17 +161,52 @@ public class Utils {
     public static Collection<File> searchForFile(String fileName, File dir) throws CopyException {
 
         IOFileFilter nff = new NameFileFilter(fileName);
-        Collection<File> list = FileUtils.listFiles(dir, nff, FileFilterUtils.trueFileFilter());
-        if( list.isEmpty() ) {
+        Collection<File> found = FileUtils.listFiles(dir, nff, FileFilterUtils.trueFileFilter());
+        if( found.isEmpty() ) {
             throw new CopyException("File '" + fileName + "' was not found in " + dir.getAbsolutePath());
         }
-        return list;
+        return found;
+    }
+
+    /**
+     *  Searches a file of given name under given directory tree.
+     *  @throws  CopyException if nothing found.
+     */
+    public static List<File> searchForFileOrDir(final String name, final File dir) throws IOException {
+
+        List<File> found = new DirectoryWalker(){
+            @Override protected boolean handleDirectory( File directory, int depth, Collection results ) throws IOException {
+                if( directory.getName().equals( name ))
+                    results.add( directory );
+                return true;
+            }
+            @Override protected void handleFile( File file, int depth, Collection results ) throws IOException {
+                results.add( file );
+            }
+            public List<File> search() throws IOException {
+                List<File> found = new LinkedList();
+                try { 
+                    this.walk( dir, found );
+                } catch( IOException ex ) {
+                    throw new IOException("Failed traversing directory '" + dir.getAbsolutePath() + "' when looking for '" + name + "'");
+                }
+                return found;
+            }
+        }.search();
+        
+        if( found.isEmpty() ) {
+            throw new FileNotFoundException("File '" + name + "' was not found in " + dir.getAbsolutePath());
+        }
+        return found;
     }
 
     /**
      * Builds up a File object with path consisting of given components.
      */
     public static File createPath(String parent, String child, String... more) {
+        return createPath( new File(parent), child, more);
+    }
+    public static File createPath(File parent, String child, String... more) {
         File file = new File(parent, child);
         for (String component : more) {
             file = new File(file, component);
@@ -166,64 +214,88 @@ public class Utils {
         return file;
     }
 
-
+    
     /**
-     * Creates a new default document builder.
-     *
-     *
+     *  Finds a subclass of given class in current stacktrace.
+     *  Returns null if not found.
      */
-    public static DocumentBuilder createXmlDocumentBuilder() {
-        DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-        dbf.setNamespaceAware(false);
-        try {
-            return dbf.newDocumentBuilder();
-        } catch (ParserConfigurationException ex) {
-            throw new RuntimeException(ex); // Tunnel
+    public static <T> Class<? extends T> findSubclassInStackTrace(Class<T> parentClass) {
+        // 0 - Thread.getStackTrace().
+        // 1 - This method.
+        // 2 - Whatever called this method.
+        return findSubclassInStackTrace( parentClass, Thread.currentThread().getStackTrace(), 2 );
+    }
+    /**
+     *  Finds a subclass of given $parentClass in given $stackTrace, skipping $skip levels.
+     *  Returns null if not found.
+     */
+    public static <T> Class<? extends T> findSubclassInStackTrace(Class<T> parentClass, StackTraceElement[] stackTrace, int skip) {
+        //for( StackTraceElement call : stackTrace) {
+        for( int i = skip; i < stackTrace.length; i++ ) {
+            StackTraceElement call = stackTrace[i];
+            try {
+                Class<?> callClass = Class.forName( call.getClassName() );
+                if( parentClass.isAssignableFrom( callClass ) )
+                    return (Class<? extends T>)  callClass;
+            } catch( ClassNotFoundException ex ) {
+                Reporter.log.error("Can't load class " + call.getClassName() + ":\n    " + ex.getMessage());
+            }
         }
+        return null;
     }
-
+    
+    
+    
     /**
-     * @deprecated TODO: useless?
+     *  Extracts all String getters properties to a map.
      */
-    public static Document parseFileToXmlDoc(File file) throws SAXException, IOException {
-        DocumentBuilder db = Utils.createXmlDocumentBuilder();
-        Document doc = db.parse(file);
-        return doc;
+    public static Map<String, String> describeBean(IConfigFragment bean){
+        
+        Map<String, String> ret = new LinkedHashMap();
+                
+        Method[] methods = bean.getClass().getMethods();
+        for( Method method : methods ) {
+            boolean get = false;
+            String name = method.getName();
+            
+            // Only use getters which return String.
+            if( method.getParameterTypes().length != 0 )  continue;
+            if( ! method.getReturnType().equals( String.class ) )  continue;
+            if( name.startsWith("get") )  get = true;
+            if( ! (get || name.startsWith("is")) )  continue;
+            
+            // Remove "get" or "is".
+            name =  name.substring( get ? 3 : 2 );
+            // Uncapitalize, unless it's getDLQJNDIName.
+            if( name.length() > 1 && ! Character.isUpperCase( name.charAt(2) ) )
+                name =  StringUtils.uncapitalize( name );
+            
+            try {
+                ret.put( name, (String) method.invoke(bean));
+            } catch(     IllegalAccessException | IllegalArgumentException | InvocationTargetException ex ) {
+                log.warn("Failed extracting property from " + bean.getClass().getSimpleName() + ":\n    " + ex.getMessage(), ex );
+            }
+        }
+        return ret;
     }
-
+    
+    
     /**
-     * Creates clean Document used in other classes for working with XML
-     *
-     * @return clean Document
-     * @throws ParserConfigurationException if creation of document fails
+     *  Returns null for empty strings.
      */
-    public static Document createDoc() throws ParserConfigurationException {
-        DocumentBuilderFactory domFactory = DocumentBuilderFactory.newInstance();
-        domFactory.setIgnoringComments(true);
-        DocumentBuilder builder = domFactory.newDocumentBuilder();
-
-        Document doc = builder.getDOMImplementation().createDocument(null, null, null);
-        return doc;
+    public static String nullIfEmpty(String str){
+        return str == null ? null : (str.isEmpty() ? null : str);
     }
-
-    /**
-     * Transforms given Document into given File
-     *
-     * @param doc  xml document to transform
-     * @param file targeted file
-     * @return file containing XML document
-     * @throws TransformerException if transformer fails
-     */
-    public static File transformDocToFile(Document doc, File file) throws TransformerException {
-        final TransformerFactory tf = TransformerFactory.newInstance();
-        final Transformer transformer = tf.newTransformer();
-        transformer.setOutputProperty(OutputKeys.INDENT, "yes");
-        transformer.setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "3");
-
-        transformer.transform(new DOMSource(doc), new StreamResult(file));
-
-        return file;
+    
+    
+    
+    public static Properties mapToProperties( Map<String, String> map ) {
+        Properties props = new Properties();
+        Set<Map.Entry<String, String>> entries = map.entrySet();
+        for( Map.Entry<String, String> entry : entries ) {
+            props.put( entry.getKey(), entry.getValue() );
+        }
+        return props;
     }
-
-
+    
 }// class

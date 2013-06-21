@@ -1,13 +1,19 @@
+/**
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0 .
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
+ * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and limitations under the License.
+ */
 package org.jboss.loom.migrators.security;
 
-import org.apache.commons.collections.map.MultiValueMap;
 import org.apache.commons.lang.StringUtils;
 import org.jboss.as.controller.client.helpers.ClientConstants;
 import org.jboss.dmr.ModelNode;
-import org.jboss.loom.CliAddScriptBuilder;
-import org.jboss.loom.CliApiCommandBuilder;
-import org.jboss.loom.MigrationContext;
-import org.jboss.loom.MigrationData;
+import org.jboss.loom.utils.as7.CliAddScriptBuilder;
+import org.jboss.loom.utils.as7.CliApiCommandBuilder;
+import org.jboss.loom.ctx.MigrationContext;
+import org.jboss.loom.ctx.MigratorData;
 import org.jboss.loom.actions.CliCommandAction;
 import org.jboss.loom.actions.CopyFileAction;
 import org.jboss.loom.actions.ModuleCreationAction;
@@ -33,6 +39,7 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
+import org.jboss.loom.spi.ann.ConfigPartDescriptor;
 
 /**
  * Migrator of security subsystem implementing IMigrator
@@ -49,6 +56,10 @@ import java.util.Set;
  *
  * @author Roman Jakubco
  */
+@ConfigPartDescriptor(
+    name = "Security (JAAS) configuration",
+    docLink = "https://access.redhat.com/site/documentation//en-US/JBoss_Enterprise_Application_Platform/5/html/Security_Guide/index.html"
+)
 public class SecurityMigrator extends AbstractMigrator {
     private static final Logger log = LoggerFactory.getLogger(SecurityMigrator.class);
 
@@ -66,15 +77,15 @@ public class SecurityMigrator extends AbstractMigrator {
     }
 
 
-    public SecurityMigrator(GlobalConfiguration globalConfig, MultiValueMap config) {
-        super(globalConfig, config);
+    public SecurityMigrator(GlobalConfiguration globalConfig) {
+        super(globalConfig);
     }
 
     /**
      *  Loads the AS 5 data.
      */
     @Override
-    public void loadAS5Data(MigrationContext ctx) throws LoadMigrationException {
+    public void loadSourceServerConfig(MigrationContext ctx) throws LoadMigrationException {
         try {
             File file = new File(getGlobalConfig().getAS5Config().getConfDir(), "login-config.xml");
             if (!file.canRead()) {
@@ -84,7 +95,7 @@ public class SecurityMigrator extends AbstractMigrator {
             Unmarshaller unmarshaller = JAXBContext.newInstance(SecurityAS5Bean.class).createUnmarshaller();
             SecurityAS5Bean securityAS5 = (SecurityAS5Bean) unmarshaller.unmarshal(file);
 
-            MigrationData mData = new MigrationData();
+            MigratorData mData = new MigratorData();
             mData.getConfigFragments().addAll(securityAS5.getApplicationPolicies());
 
             ctx.getMigrationData().put(SecurityMigrator.class, mData);
@@ -356,8 +367,8 @@ public class SecurityMigrator extends AbstractMigrator {
         }
 
         CliApiCommandBuilder builder = new CliApiCommandBuilder(moduleNode);
-        builder.addProperty("flag", module.getLoginModuleFlag());
-        builder.addProperty("code", module.getLoginModuleCode());
+        builder.addPropertyIfSet("flag", module.getLoginModuleFlag());
+        builder.addPropertyIfSet("code", module.getLoginModuleCode());
 
         // Needed for CLI because parameter login-modules requires LIST
         list.add(builder.getCommand());

@@ -1,3 +1,10 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at http://www.apache.org/licenses/LICENSE-2.0 .
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed
+ * on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and limitations under the License.
+ */
 package org.jboss.loom;
 
 import org.jboss.loom.conf.AS7Config;
@@ -11,12 +18,9 @@ import org.apache.commons.lang.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.io.IOException;
-import java.net.UnknownHostException;
 import java.util.LinkedList;
 import java.util.List;
-import org.jboss.as.controller.client.ModelControllerClient;
+import org.jboss.loom.conf.ConfigurationValidator;
 
 
 /**
@@ -44,8 +48,12 @@ public class MigratorApp {
         // Apply defaults.
         applyDefaults( configuration );
         
+        // MIGR-84
+        if( null != System.getenv("JBOSS_HOME") );
+            log.warn("JBOSS_HOME is set, might cause the migration to fail. Unset if you run in trouble.");
+        
         // Validate config.
-        List<String> problems = validateConfiguration( configuration );
+        List<String> problems = ConfigurationValidator.validate( configuration );
         if( !problems.isEmpty() ){
             for( String problem : problems )
                 log.error(problem);
@@ -72,7 +80,7 @@ public class MigratorApp {
      *  Parses app's arguments.
      *  @returns  Configuration initialized according to args.
      */
-    private static Configuration parseArguments(String[] args) {
+    static Configuration parseArguments(String[] args) {
     
         // Global config
         GlobalConfiguration globalConfig = new GlobalConfiguration();
@@ -83,48 +91,67 @@ public class MigratorApp {
         
         // For each argument...
         for (String arg : args) {
-            if( arg.startsWith("--help") ){
+            arg = StringUtils.removeStart( arg, "--" );
+            
+            if( arg.equals("help") ){
                 Utils.writeHelp();
                 return null;
             }
-            if( arg.startsWith("--as5.dir=") || arg.startsWith("as5.dir=") ) {
+            if( arg.startsWith("as5.dir=") || arg.startsWith("eap5.dir=") || arg.startsWith("src.dir=") ) {
                 globalConfig.getAS5Config().setDir(StringUtils.substringAfter(arg, "="));
                 continue;
             }
 
-            if( arg.startsWith("--as7.dir=") || arg.startsWith("as7.dir=")) {
+            if( arg.startsWith("dest.dir=") || arg.startsWith("eap6.dir=") || arg.startsWith("dest.dir=") || arg.startsWith("wfly.dir=") ) {
                 globalConfig.getAS7Config().setDir(StringUtils.substringAfter(arg, "="));
                 continue;
             }
 
-            if( arg.startsWith("--as5.profile=") ) {
+            if( arg.startsWith("as5.profile=") || arg.startsWith("eap5.profile=") || arg.startsWith("src.profile=") ) {
                 globalConfig.getAS5Config().setProfileName(StringUtils.substringAfter(arg, "="));
                 continue;
             }
 
-            if( arg.startsWith("--as7.confPath=") ) {
+            if( arg.startsWith("dest.confPath=") || arg.startsWith("eap6.confPath=") || arg.startsWith("dest.conf.file=") || arg.startsWith("wfly.confPath=") ) {
                 globalConfig.getAS7Config().setConfigPath(StringUtils.substringAfter(arg, "="));
                 continue;
             }
 
-            if( arg.startsWith("--as7.mgmt=") ) {
+            if( arg.startsWith("dest.mgmt=") ||  arg.startsWith("eap6.mgmt=") ||  arg.startsWith("dest.mgmt=") ||  arg.startsWith("wfly.mgmt=") ) {
                 parseMgmtConn( StringUtils.substringAfter(arg, "="), globalConfig.getAS7Config() );
                 continue;
             }
 
-            if( arg.startsWith("--app.path=") ) {
-                globalConfig.setAppPath(StringUtils.substringAfter(arg, "="));
+            if( arg.startsWith("app.path=") ) {
+                globalConfig.addDeploymentPath( StringUtils.substringAfter(arg, "="));
                 continue;
             }
 
-            if( arg.startsWith("--valid.skip") ) {
+            if( arg.startsWith("valid.skip") ) {
                 globalConfig.setSkipValidation(true);
                 continue;
             }
 
+            if( arg.equals("dry") || arg.equals("dryRun") || arg.equals("dry-run") ) {
+                globalConfig.setDryRun(true);
+                continue;
+            }
+            
+            if( arg.equals("test") || arg.equals("testRun") || arg.equals("test-run") ) {
+                globalConfig.setTestRun(true);
+                continue;
+            }
+            
+            if( arg.startsWith("report.dir=") ) {
+                globalConfig.setReportDir( StringUtils.substringAfter(arg, "="));
+                continue;
+            }
+
+            
+
             // Module-specific configurations.
             // TODO: Process by calling IMigrator instances' callback.
-            if (arg.startsWith("--conf.")) {
+            if (arg.startsWith("conf.")) {
                 
                 // --conf.<module>.<property.name>[=<value>]
                 String conf = StringUtils.substringAfter(arg, ".");
@@ -140,11 +167,17 @@ public class MigratorApp {
                 moduleConfigs.add( new ModuleSpecificProperty(module, propName, value));
             }
 
+            
+            // Unrecognized.
+            
+            if( ! arg.contains("=") ){
+                // TODO: Could be AS5 or AS7 dir.
+            }
+            
             System.err.println("Warning: Unknown argument: " + arg + " !");
             Utils.writeHelp();
             continue;
         }
-        //globalConfig.setStandaloneFilePath();
 
         Configuration configuration = new Configuration();
         configuration.setModuleConfigs(moduleConfigs);
@@ -166,86 +199,13 @@ public class MigratorApp {
     
     
     /**
-     *  Validates the config - checks if the paths exist, contain the expected files etc.
-     * 
-     *  @returns  True if everything is OK.
-     */
-    public static List<String> validateConfiguration(Configuration config) {
-        LinkedList<String> problems = new LinkedList<>();
-        
-        // AS 5
-        String path = config.getGlobal().getAS5Config().getDir();
-        if( null == path )
-            problems.add("as5.dir was not set.");
-        else if( ! new File(path).isDirectory() )
-            problems.add("as5.dir is not a directory: " + path);
-        else {
-            String profileName = config.getGlobal().getAS5Config().getProfileName();
-            if( null == profileName )
-                ;
-            else {
-                File profileDir = config.getGlobal().getAS5Config().getProfileDir();
-                if( ! profileDir.exists() )
-                    problems.add("as5.profile is not a subdirectory in AS 5 dir: " + profileDir.getPath());
-            }
-        }
-        // AS 7
-        AS7Config as7Config = config.getGlobal().getAS7Config();
-        path = as7Config.getDir();
-        if( null == path )
-            problems.add("as7.dir was not set.");
-        else if( ! new File(path).isDirectory() )
-            problems.add("as7.dir is not a directory: " + path);
-        else {
-            String configPath = as7Config.getConfigFilePath();
-            if( null == configPath )
-                ; //problems.add("as7.confPath was not set."); // TODO: Put defaults to the config.
-            else{
-                File configFile = new File(path, configPath);
-                if( ! configFile.exists() )
-                //    problems.add(
-                    log.warn("as7.confPath is not a subpath under AS 7 dir: " + configFile.getPath() );
-            }
-        }
-        
-        // Management host and port
-        mgmt: {
-            if( as7Config.getManagementPort() == -1 ){
-                problems.add("as7.mgmt doesn't contain valid port after ':'.");
-                break mgmt;
-            }
-        
-            ModelControllerClient client = null;
-            try {
-                client = ModelControllerClient.Factory.create(as7Config.getHost(), as7Config.getManagementPort());
-                client.close();
-            }
-            catch( UnknownHostException ex ){
-                problems.add("Can't connect to AS 7 management: " + as7Config.getHost() + ":" + as7Config.getManagementPort());
-            }
-            catch( IOException ex ){ } // Happens on close().
-        }
-
-        
-        // App (deployment)
-        path = config.getGlobal().getAppPath();
-        if( null != path && ! new File(path).exists())
-            problems.add("App path was set but does not exist: " + path);
-        
-        return problems;
-    }
-
-
-
-    
-    /**
      *  Performs the migration.
      */
     public static void migrate( Configuration conf ) throws MigrationException {
         
         log.info("Commencing migration.");
         
-        MigratorEngine migrator = new MigratorEngine(conf);
+        MigrationEngine migrator = new MigrationEngine(conf);
 
         try {
             migrator.doMigration();

@@ -40,6 +40,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import org.jboss.loom.spi.ann.ConfigPartDescriptor;
+import org.jboss.loom.utils.UtilsAS5;
 
 /**
  * Migrator of security subsystem implementing IMigrator
@@ -247,7 +248,7 @@ public class SecurityMigrator extends AbstractMigrator {
             throws MigrationException{
         File fileJar;
         try {
-            fileJar = Utils.findJarFileWithClass(className, getGlobalConfig().getAS5Config().getDir(),
+            fileJar = UtilsAS5.findJarFileWithClass(className, getGlobalConfig().getAS5Config().getDir(),
                     getGlobalConfig().getAS5Config().getProfileName());
         } catch (IOException ex) {
             throw new MigrationException("Failed finding jar with class " + className + ": " + ex.getMessage(), ex);
@@ -396,7 +397,7 @@ public class SecurityMigrator extends AbstractMigrator {
         resultScript.append(securityDomain.getSecurityDomainName()).append(":add(");
         builder.addProperty("cache-type", securityDomain.getCacheType());
 
-        resultScript.append(builder.asString()).append(")");
+        resultScript.append(builder.formatAndClearProps()).append(")");
 
         return resultScript.toString();
     }

@@ -7,6 +7,7 @@
  */
 package org.jboss.loom.utils;
 
+import groovy.lang.GroovyClassLoader;
 import org.jboss.loom.ex.CliScriptException;
 import org.jboss.loom.ex.CopyException;
 import org.apache.commons.io.FileUtils;
@@ -18,6 +19,7 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Collection;
@@ -43,24 +45,9 @@ import org.jboss.loom.tools.report.Reporter;
 public class Utils {
     private static final Logger log = LoggerFactory.getLogger(Utils.class);
 
-    
-    /**
-     * Method for testing if given string is null or empty and if it is then CliScriptException is thrown with given message
-     *
-     * @param string string for testing
-     * @param errMsg message for exception
-     * @param name   name of property of tested value
-     * @throws CliScriptException if tested string is empty or null
-     */
-    public static void throwIfBlank(String string, String errMsg, String name) throws CliScriptException {
-        if ((string == null) || (string.isEmpty())) {
-            throw new CliScriptException(name + errMsg);
-        }
-    }
-
 
     /**
-     * Helping method for writing help.
+     *  Prints app help.
      */
     public static void writeHelp() {
         System.out.println();
@@ -91,67 +78,47 @@ public class Utils {
         System.out.println();
     }
 
+    
     /**
-     * Utils class for finding name of jar file containing class from logging configuration.
-     *
-     * @param className  name of the class which must be found
-     * @param dirAS5     AS5 home dir
-     * @param profileAS5 name of AS5 profile
-     * @return name of jar file which contains given class
-     * @throws FileNotFoundException if the jar file is not found
-     *                               <p/>
-     *                               TODO: This would cause false positives - e.g. class = org.Foo triggered by org/Foo/Blah.class .
+     *  TODO: Return a list of files.
      */
-    public static File findJarFileWithClass(String className, String dirAS5, String profileAS5) throws FileNotFoundException, IOException {
+    public static File lookForJarWithClass( String className, File... dirs ) throws IOException {
+        for( File dir : dirs ) {
+            log.debug("    Looking in " +  dir.getPath() + " for a .jar with: " + className);
 
-        String classFilePath = className.replace(".", "/");
+            if( ! dir.isDirectory() ){
+                log.trace("    Not a directory: " +  dir.getPath());
+                continue;
+            }
 
-        // First look for jar file in lib directory in given AS5 profile
-        File dir = Utils.createPath(dirAS5, "server", profileAS5, "lib");
-        File jar = lookForJarWithAClass(dir, classFilePath);
-        if (jar != null)
-            //return jar.getName();
-            return jar;
+            Collection<File> jarFiles = FileUtils.listFiles(dir, new String[]{"jar"}, true);
+            log.trace("    Found .jar files: " + jarFiles.size());
 
-        // If not found in profile's lib directory then try common/lib folder (common jars for all profiles)
-        dir = Utils.createPath(dirAS5, "common", "lib");
-        jar = lookForJarWithAClass(dir, classFilePath);
-        if (jar != null)
-            //return jar.getName();
-            return jar;
+            String classFilePath = className.replace(".", "/");
 
-        throw new FileNotFoundException("Cannot find jar file which contains class: " + className);
-    }
-
-    private static File lookForJarWithAClass(File dir, String classFilePath) throws IOException {
-        log.debug("    Looking in " +  dir.getPath() + " for a .jar with: " + classFilePath.replace('/', '.'));
-        if( ! dir.isDirectory() ){
-            log.trace("    Not a directory: " +  dir.getPath());
-            return null;
-        }
-
-        //SuffixFileFilter sf = new SuffixFileFilter(".jar");
-        //List<File> list = (List<File>) FileUtils.listFiles(dir, sf, FileFilterUtils.makeCVSAware(null));
-        Collection<File> jarFiles = FileUtils.listFiles(dir, new String[]{"jar"}, true);
-        log.trace("    Found .jar files: " + jarFiles.size());
-
-        for (File file : jarFiles) {
-            // Search the contained files for those containing $classFilePath.
-            try (JarFile jarFile = new JarFile(file)) {
-                final Enumeration<JarEntry> entries = jarFile.entries();
-                while (entries.hasMoreElements()) {
-                    final JarEntry entry = entries.nextElement();
-                    if ((!entry.isDirectory()) && entry.getName().contains(classFilePath)) {
-
-                        // Assuming that jar file contains some package with class (common Java practice)
-                        //return  StringUtils.substringAfterLast(file.getPath(), "/");
+            for( File file : jarFiles ) {
+                // Search the contained files for those containing $classFilePath.
+                try( JarFile jarFile = new JarFile(file) ) {
+                    if( containsClass( jarFile, classFilePath ) )
                         return file;
-                    }
                 }
             }
         }
         return null;
+    }// lookForJarWithClass()
+
+
+    
+    private static boolean containsClass( JarFile jarFile, String classFilePath ) {
+        final Enumeration<JarEntry> entries = jarFile.entries();
+        while( entries.hasMoreElements() ) {
+            final JarEntry entry = entries.nextElement();
+            if( ( ! entry.isDirectory() ) && entry.getName().contains( classFilePath ))
+                return true;
+        }
+        return false;
     }
+    
 
     
     /**
@@ -172,7 +139,7 @@ public class Utils {
      *  Searches a file of given name under given directory tree.
      *  @throws  CopyException if nothing found.
      */
-    public static List<File> searchForFileOrDir(final String name, final File dir) throws IOException {
+    public static List<File> searchForFileOrDir( final String name, final File dir ) throws IOException {
 
         List<File> found = new DirectoryWalker(){
             @Override protected boolean handleDirectory( File directory, int depth, Collection results ) throws IOException {
@@ -181,7 +148,8 @@ public class Utils {
                 return true;
             }
             @Override protected void handleFile( File file, int depth, Collection results ) throws IOException {
-                results.add( file );
+                if( file.getName().equals( name ))
+                    results.add( file );
             }
             public List<File> search() throws IOException {
                 List<File> found = new LinkedList();
@@ -214,6 +182,23 @@ public class Utils {
         return file;
     }
 
+    /**
+     *  Missing from Commons IO's FileUtils...
+     */
+    public static void copyFileOrDirectory( File src, File dest  ) throws IOException {
+        if( src.isFile() )
+            FileUtils.copyFile( src, dest );
+        else if( src.isDirectory() )
+            FileUtils.copyDirectory( src, dest );
+        else
+            throw new UnsupportedOperationException("Can only copy file or directory. Not this: " + src.getPath());
+    }
+
+
+    
+    // ======= Lang utils ====== //
+    
+    
     
     /**
      *  Finds a subclass of given class in current stacktrace.
@@ -248,6 +233,7 @@ public class Utils {
     
     /**
      *  Extracts all String getters properties to a map.
+     *  @see also @Property.Utils.convert*()
      */
     public static Map<String, String> describeBean(IConfigFragment bean){
         
@@ -279,6 +265,17 @@ public class Utils {
         return ret;
     }
     
+
+    
+    /**
+     *  Throws a formatted message (name + errMsg) if string is null or empty.
+     */
+    public static void throwIfBlank(String string, String errMsg, String name) throws CliScriptException {
+        if ((string == null) || (string.isEmpty())) {
+            throw new CliScriptException(name + errMsg);
+        }
+    }
+    
     
     /**
      *  Returns null for empty strings.
@@ -297,5 +294,18 @@ public class Utils {
         }
         return props;
     }
+
     
+    
+    // ======= Class utils ====== //
+    
+    public static void copyResourceToDir( Class cls, String name, File dir ) throws IOException {
+        String packageDir =  cls.getPackage().getName().replace('.', '/');
+        String path =  "/" + packageDir + "/" + name;
+        InputStream is = GroovyClassLoader.class.getResourceAsStream( path );
+        if( is == null )
+            throw new IllegalArgumentException("Resource not found: " + packageDir);
+        FileUtils.copyInputStreamToFile( is, new File(dir, name) );
+    }
+
 }// class

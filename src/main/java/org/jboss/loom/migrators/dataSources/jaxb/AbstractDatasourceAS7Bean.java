@@ -10,357 +10,197 @@ package org.jboss.loom.migrators.dataSources.jaxb;
 import org.eclipse.persistence.oxm.annotations.XmlPath;
 
 import javax.xml.bind.annotation.XmlElement;
+import org.jboss.loom.spi.ann.Property;
 
 /**
- * User: Roman Jakubco
- * Date: 4/28/13
+ *  @author Roman Jakubco
  */
-public abstract class AbstractDatasourceAS7Bean{
+@Property.Access( Property.Access.Type.FIELD )
+public abstract class AbstractDatasourceAS7Bean // TODO: extends AbstractDatasourceBean
+{
     private String linkedSecurity;
 
+    @Property(label = "driver name")
+    @XmlElement(name = "driver")
+    public String getDriver() { return driver; }
+    public void setDriver(String driver) { this.driver = driver; }
+    private String driver;
+
     @XmlPath("@jndi-name")
-    private String jndiName;
+    public String getJndiName() { return jndiName; }
+    public void setJndiName(String jndiName) { this.jndiName = jndiName; }
+    private String jndiName;// == In base class
 
     @XmlPath("@pool-name")
+    public String getPoolName() { return poolName; }
+    public void setPoolName(String poolName) { this.poolName = poolName; }
     private String poolName;
 
     @XmlPath("@enabled")
+    public String getEnabled() { return enabled; }
+    public void setEnabled(String enabled) { this.enabled = enabled; }
     private String enabled;
 
     @XmlPath("@use-java-context")
-    private String useJavaContext;
+    public String getUseJavaContext() { return useJavaContext; }
+    public void setUseJavaContext(String useJavaContext) { this.useJavaContext = useJavaContext; }
+    private String useJavaContext;//
 
     @XmlElement(name = "url-delimeter")
-    private String urlDelimeter;
+    public String getUrlDelimeter() { return urlDelimeter; }
+    public void setUrlDelimeter(String urlDelimeter) { this.urlDelimeter = urlDelimeter; }
+    private String urlDelimeter;//
 
     @XmlElement(name = "url-selector-strategy-class-name")
-    private String urlSelector;
-
-    @XmlElement(name = "driver")
-    private String driver;
+    public String getUrlSelectorStrategyClassName() { return urlSelectorStrategyClassName; }
+    public void setUrlSelectorStrategyClassName( String urlSelectorStrategyClassName ) { this.urlSelectorStrategyClassName = urlSelectorStrategyClassName; }
+    private String urlSelectorStrategyClassName;//
 
     @XmlElement(name = "transaction-isolation")
-    private String transIsolation;
+    public String getTransactionIsolation() { return transactionIsolation; }
+    public void setTransactionIsolation( String transactionIsolation ) { this.transactionIsolation = transactionIsolation; }
+    private String transactionIsolation;//
 
     @XmlElement(name = "new-connection-sql")
-    private String newConnectionSql;
+    public String getNewConnectionSql() { return newConnectionSql; }
+    public void setNewConnectionSql(String newConnectionSql) { this.newConnectionSql = newConnectionSql; }
+    private String newConnectionSql;//
 
 
     // Elements in security element
     @XmlPath("/security/password/text()")
-    private String password;
+    public String getPassword() { return password; }
+    public void setPassword(String password) { this.password = password; }
+    private String password;//
 
     @XmlPath("/security/user-name/text()")
-    private String userName;
+    public String getUserName() { return userName; }
+    public void setUserName(String userName) { this.userName = userName; }
+    private String userName;//
 
     @XmlPath("/security/security-domain/text()")
-    private String securityDomain;
-
-
-    // Elements in validation element
-    @XmlPath("/validation/check-valid-connection-sql/text()")
-    private String checkValidConSql;
-
-    @XmlPath("/validation/validate-on-match/text()")
-    private String validateOnMatch;
-
-    @XmlPath("/validation/background-validation/text()")
-    private String backgroundValid;
-
-    @XmlPath("/validation/background-validation-minutes/text()")
-    private String backgroundValidMin;
-
-    @XmlPath("/validation/use-fast-fail/text()")
-    private String useFastFail;
-
-    @XmlPath("/validation/exception-sorter/text()")
-    private String exceptionSorter;
-
-    @XmlPath("/validation/valid-connection-checker/text()")
-    private String validConChecker;
-
-    @XmlPath("/validation/stale-connection-checker/text()")
-    private String staleConChecker;
-
-
-    // Elements in timeout element
-    @XmlPath("/timeout/blocking-timeout-millis/text()")
-    private String blockingTimeoutMillis;
-
-    @XmlPath("/timeout/idle-timeout-minutes/text()")
-    private String idleTimeoutMin;
-
-    @XmlPath("/timeout/set-tx-query-timeout/text()")
-    private String setTxQueryTimeout;
-
-    @XmlPath("/timeout/query-timeout/text()")
-    private String queryTimeout;
-
-    @XmlPath("/timeout/allocation-retry/text()")
-    private String allocationRetry;
-
-    @XmlPath("/timeout/allocation-retry-wait-millis/text()")
-    private String allocRetryWaitMillis;
-
-    @XmlPath("/timeout/use-try-lock/text()")
-    private String useTryLock;
-
-
-    // Elements in statement element
-    @XmlPath("/statement/prepared-statement-cache-size/text()")
-    private String preStatementCacheSize;
-
-    @XmlPath("/statement/track-statements/text()")
-    private String trackStatements;
-
-    @XmlPath("/statement/share-prepared-statements/text()")
-    private String sharePreStatements;
-
-
-
-
-    public String getLinkedSecurity() {
-        return linkedSecurity;
-    }
-
-    public String getJndiName() {
-        return jndiName;
-    }
-
-    public String getEnabled() {
-        return enabled;
-    }
-
-    public void setEnabled(String enabled) {
-        this.enabled = enabled;
-    }
-
-    public void setJndiName(String jndiName) {
-        this.jndiName = jndiName;
-    }
-
-    public String getPoolName() {
-        return poolName;
-    }
-
-    public void setPoolName(String poolName) {
-        this.poolName = poolName;
-    }
-
-    public String getUseJavaContext() {
-        return useJavaContext;
-    }
-
-    public void setUseJavaContext(String useJavaContext) {
-        this.useJavaContext = useJavaContext;
-    }
-
-    public String getUrlDelimeter() {
-        return urlDelimeter;
-    }
-
-    public void setUrlDelimeter(String urlDelimeter) {
-        this.urlDelimeter = urlDelimeter;
-    }
-
-    public String getUrlSelector() {
-        return urlSelector;
-    }
-
-    public void setUrlSelector(String urlSelector) {
-        this.urlSelector = urlSelector;
-    }
-
-    public String getDriver() {
-        return driver;
-    }
-
-    public void setDriver(String driver) {
-        this.driver = driver;
-    }
-
-    public String getTransIsolation() {
-        return transIsolation;
-    }
-
-    public void setTransIsolation(String transIsolation) {
-        this.transIsolation = transIsolation;
-    }
-
-    public String getNewConnectionSql() {
-        return newConnectionSql;
-    }
-
-    public void setNewConnectionSql(String newConnectionSql) {
-        this.newConnectionSql = newConnectionSql;
-    }
-
-    public String getPassword() {
-        return password;
-    }
-
-    public void setPassword(String password) {
-        this.password = password;
-    }
-
-    public String getUserName() {
-        return userName;
-    }
-
-    public void setUserName(String userName) {
-        this.userName = userName;
-    }
-
-    public String getSecurityDomain() {
-        return securityDomain;
-    }
-
+    public String getSecurityDomain() { return securityDomain; }
     public void setSecurityDomain(String securityDomain) {
         this.securityDomain = securityDomain;
         linkedSecurity = securityDomain;
     }
+    private String securityDomain;//
 
-    public String getBlockingTimeoutMillis() {
-        return blockingTimeoutMillis;
-    }
 
-    public void setBlockingTimeoutMillis(String blockingTimeoutMillis) {
-        this.blockingTimeoutMillis = blockingTimeoutMillis;
-    }
+    // Elements in validation element
+    @XmlPath("/validation/check-valid-connection-sql/text()")
+    public String getCheckValidConnectionSql() { return checkValidConnectionSql; }
+    public void setCheckValidConnectionSql( String checkValidConnectionSql ) { this.checkValidConnectionSql = checkValidConnectionSql; }
+    private String checkValidConnectionSql;//
 
-    public String getIdleTimeoutMin() {
-        return idleTimeoutMin;
-    }
+    @XmlPath("/validation/validate-on-match/text()")
+    public String getValidateOnMatch() { return validateOnMatch; }
+    public void setValidateOnMatch( String validateOnMatch ) { this.validateOnMatch = validateOnMatch; }
+    private String validateOnMatch;//
 
-    public void setIdleTimeoutMin(String idleTimeoutMin) {
-        this.idleTimeoutMin = idleTimeoutMin;
-    }
+    @XmlPath("/validation/background-validation/text()")
+    public String getBackgroundValidation() { return backgroundValidation; }
+    public void setBackgroundValidation( String backgroundValidation ) { this.backgroundValidation = backgroundValidation; }
+    private String backgroundValidation; //
 
-    public String getSetTxQueryTimeout() {
-        return setTxQueryTimeout;
-    }
+    @XmlPath("/validation/background-validation-minutes/text()")
+    public String getBackgroundValidationMinutes() { return backgroundValidationMinutes; }
+    public void setBackgroundValidationMinutes( String backgroundValidationMinutes ) { this.backgroundValidationMinutes = backgroundValidationMinutes; }
+    private String backgroundValidationMinutes;/// Millis
 
-    public void setSetTxQueryTimeout(String setTxQueryTimeout) {
-        this.setTxQueryTimeout = setTxQueryTimeout;
-    }
+    @XmlPath("/validation/use-fast-fail/text()")
+    public String getUseFastFail() { return useFastFail; }
+    public void setUseFastFail( String useFastFail ) { this.useFastFail = useFastFail; }
+    private String useFastFail;
 
-    public String getQueryTimeout() {
-        return queryTimeout;
-    }
+    @XmlPath("/validation/exception-sorter/text()")
+    public String getExceptionSorter() { return exceptionSorter; }
+    public void setExceptionSorter( String exceptionSorter ) { this.exceptionSorter = exceptionSorter; }
+    private String exceptionSorter; /// ~ClassName
 
-    public void setQueryTimeout(String queryTimeout) {
-        this.queryTimeout = queryTimeout;
-    }
+    @XmlPath("/validation/valid-connection-checker/text()")
+    public String getValidConnectionChecker() { return validConnectionChecker; }
+    public void setValidConnectionChecker( String validConnectionChecker ) { this.validConnectionChecker = validConnectionChecker; }
+    private String validConnectionChecker;///~ClassName
 
-    public String getAllocationRetry() {
-        return allocationRetry;
-    }
+    @XmlPath("/validation/stale-connection-checker/text()")
+    public String getStaleConnectionChecker() { return staleConnectionChecker; }
+    public void setStaleConnectionChecker( String staleConnectionChecker ) { this.staleConnectionChecker = staleConnectionChecker; }
+    private String staleConnectionChecker;///~ClassName
 
-    public void setAllocationRetry(String allocationRetry) {
-        this.allocationRetry = allocationRetry;
-    }
 
-    public String getAllocRetryWaitMillis() {
-        return allocRetryWaitMillis;
-    }
+    // Elements in timeout element
+    @XmlPath("/timeout/blocking-timeout-millis/text()")
+    public String getBlockingTimeoutMillis() { return blockingTimeoutMillis; }
+    public void setBlockingTimeoutMillis( String blockingTimeoutMillis ) { this.blockingTimeoutMillis = blockingTimeoutMillis; }
+    private String blockingTimeoutMillis;//
 
-    public void setAllocRetryWaitMillis(String allocRetryWaitMillis) {
-        this.allocRetryWaitMillis = allocRetryWaitMillis;
-    }
+    @XmlPath("/timeout/idle-timeout-minutes/text()")
+    public String getIdleTimeoutMinutes() { return idleTimeoutMinutes; }
+    public void setIdleTimeoutMinutes( String idleTimeoutMinutes ) { this.idleTimeoutMinutes = idleTimeoutMinutes; }
+    private String idleTimeoutMinutes;//
+    
+    @XmlPath("/timeout/set-tx-query-timeout/text()")
+    public String getSetTxQueryTimeout() { return setTxQueryTimeout; }
+    public void setSetTxQueryTimeout( String setTxQueryTimeout ) { this.setTxQueryTimeout = setTxQueryTimeout; }
+    private String setTxQueryTimeout;//
 
-    public String getUseTryLock() {
-        return useTryLock;
-    }
+    @XmlPath("/timeout/query-timeout/text()")
+    public String getQueryTimeout() { return queryTimeout; }
+    public void setQueryTimeout( String queryTimeout ) { this.queryTimeout = queryTimeout; }
+    private String queryTimeout;//
 
-    public void setUseTryLock(String useTryLock) {
-        this.useTryLock = useTryLock;
-    }
+    @XmlPath("/timeout/allocation-retry/text()")
+    public String getAllocationRetry() { return allocationRetry; }
+    public void setAllocationRetry( String allocationRetry ) { this.allocationRetry = allocationRetry; }
+    private String allocationRetry;//
 
-    public String getCheckValidConSql() {
-        return checkValidConSql;
-    }
+    @XmlPath("/timeout/allocation-retry-wait-millis/text()")
+    public String getAllocationRetryWaitMillis() { return allocationRetryWaitMillis; }
+    public void setAllocationRetryWaitMillis( String allocationRetryWaitMillis ) { this.allocationRetryWaitMillis = allocationRetryWaitMillis; }
+    private String allocationRetryWaitMillis;//
 
-    public void setCheckValidConSql(String checkValidConSql) {
-        this.checkValidConSql = checkValidConSql;
-    }
+    @XmlPath("/timeout/use-try-lock/text()")
+    public String getUseTryLock() { return useTryLock; }
+    public void setUseTryLock( String useTryLock ) { this.useTryLock = useTryLock; }
+    private String useTryLock;//
 
-    public String getValidateOnMatch() {
-        return validateOnMatch;
-    }
 
-    public void setValidateOnMatch(String validateOnMatch) {
-        this.validateOnMatch = validateOnMatch;
-    }
+    // Elements in statement element
+    @XmlPath("/statement/prepared-statement-cache-size/text()")
+    public String getPreparedStatementCacheSize() { return preparedStatementCacheSize; }
+    public void setPreparedStatementCacheSize( String preparedStatementCacheSize ) { this.preparedStatementCacheSize = preparedStatementCacheSize; }
+    private String preparedStatementCacheSize;//
 
-    public String getBackgroundValid() {
-        return backgroundValid;
-    }
+    @XmlPath("/statement/track-statements/text()")
+    public String getTrackStatements() { return trackStatements; }
+    public void setTrackStatements( String trackStatements ) { this.trackStatements = trackStatements; }
+    private String trackStatements;//
 
-    public void setBackgroundValid(String backgroundValid) {
-        this.backgroundValid = backgroundValid;
-    }
+    @XmlPath("/statement/share-prepared-statements/text()")
+    public String getSharePreparedStatements() { return sharePreparedStatements; }
+    public void setSharePreparedStatements( String sharePreparedStatements ) { this.sharePreparedStatements = sharePreparedStatements; }
+    private String sharePreparedStatements;//
+    
 
-    public String getBackgroundValidMin() {
-        return backgroundValidMin;
-    }
 
-    public void setBackgroundValidMin(String backgroundValidMin) {
-        this.backgroundValidMin = backgroundValidMin;
-    }
+    // Elements in pool element
+    @XmlPath("/pool/min-pool-size/text()")
+    public String getMinPoolSize() { return minPoolSize; }
+    public void setMinPoolSize(String minPoolSize) { this.minPoolSize = minPoolSize; }
+    private String minPoolSize;//
+    
+    @XmlPath("/pool/max-pool-size/text()")
+    public String getMaxPoolSize() { return maxPoolSize; }
+    public void setMaxPoolSize(String maxPoolSize) { this.maxPoolSize = maxPoolSize; }
+    private String maxPoolSize;//
 
-    public String getUseFastFail() {
-        return useFastFail;
-    }
+    @XmlPath("/pool/prefill/text()")
+    public String getPrefill() { return prefill; }
+    public void setPrefill(String prefill) { this.prefill = prefill; }
+    private String prefill;//
 
-    public void setUseFastFail(String useFastFail) {
-        this.useFastFail = useFastFail;
-    }
-
-    public String getExceptionSorter() {
-        return exceptionSorter;
-    }
-
-    public void setExceptionSorter(String exceptionSorter) {
-        this.exceptionSorter = exceptionSorter;
-    }
-
-    public String getValidConChecker() {
-        return validConChecker;
-    }
-
-    public void setValidConChecker(String validConChecker) {
-        this.validConChecker = validConChecker;
-    }
-
-    public String getStaleConChecker() {
-        return staleConChecker;
-    }
-
-    public void setStaleConChecker(String staleConChecker) {
-        this.staleConChecker = staleConChecker;
-    }
-
-    public String getPreStatementCacheSize() {
-        return preStatementCacheSize;
-    }
-
-    public void setPreStatementCacheSize(String preStatementCacheSize) {
-        this.preStatementCacheSize = preStatementCacheSize;
-    }
-
-    public String getTrackStatements() {
-        return trackStatements;
-    }
-
-    public void setTrackStatements(String trackStatements) {
-        this.trackStatements = trackStatements;
-    }
-
-    public String getSharePreStatements() {
-        return sharePreStatements;
-    }
-
-    public void setSharePreStatements(String sharePreStatements) {
-        this.sharePreStatements = sharePreStatements;
-    }
-}
+    
+    public String getLinkedSecurity() { return linkedSecurity; }    
+    
+}// class

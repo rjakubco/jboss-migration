@@ -43,6 +43,7 @@ import org.slf4j.LoggerFactory;
 
 import static org.jboss.loom.conf.Configuration.IfExists;
 import org.jboss.loom.spi.ann.ConfigPartDescriptor;
+import org.jboss.loom.utils.UtilsAS5;
 
 /**
  * Migrator of logging subsystem implementing IMigrator.
@@ -183,11 +184,11 @@ public class LoggingMigrator extends AbstractMigrator {
         // Appenders.
         HashMap<File, String> tempModules = new HashMap();
         for( AppenderBean appender : appenders) {
-                List<IMigrationAction> actions = createAppenderAction( appender, tempModules );
-                for( IMigrationAction action : actions ) {
-                    ctx.getActions().add( action );
-                    appenderNamesToActions.put( appender.getAppenderName(), action );
-                }
+            List<? extends IMigrationAction> actions = createAppenderAction( appender, tempModules );
+            for( IMigrationAction action : actions ) {
+                ctx.getActions().add( action );
+                appenderNamesToActions.put( appender.getAppenderName(), action );
+            }
         }
 
         // Categories
@@ -257,7 +258,7 @@ public class LoggingMigrator extends AbstractMigrator {
         
         File fileJar;
         try {
-            fileJar = Utils.findJarFileWithClass(handler.getClassValue(), getGlobalConfig().getAS5Config().getDir(),
+            fileJar = UtilsAS5.findJarFileWithClass(handler.getClassValue(), getGlobalConfig().getAS5Config().getDir(),
                     getGlobalConfig().getAS5Config().getProfileName());
         } catch (IOException ex) {
             throw new MigrationException("Failed finding jar with class " + handler.getClassValue() + ": " + ex.getMessage(), ex);
@@ -266,13 +267,12 @@ public class LoggingMigrator extends AbstractMigrator {
         List<IMigrationAction> actions = new LinkedList();
 
         if (tempModules.containsKey(fileJar)) {
-            // It means that moduleAction is already set. No need for another one => create CLI for CustomHandler and
-            // continue on the next iteration
+            // ModuleCreationAction is already set. No need for another one => just create CLI for CustomHandler
             try {
-                handler.setModule(tempModules.get(fileJar));
-                actions.add(createCustomHandlerCliAction(handler));
+                handler.setModule( tempModules.get( fileJar ) );
+                actions.add( createCustomHandlerCliAction( handler ) );
             }
-            catch (CliScriptException ex) {
+            catch( CliScriptException ex ) {
                 throw new MigrationException("Failed creating a CLI command for appeneder " + handler.getName() + ": " + ex.getMessage(), ex);
             }
 
@@ -287,7 +287,7 @@ public class LoggingMigrator extends AbstractMigrator {
             handler.setModule( moduleName );
             tempModules.put( fileJar, moduleName );
 
-            actions.add(createCustomHandlerCliAction(handler));
+            actions.add( createCustomHandlerCliAction( handler ) );
 
             String[] deps = new String[]{"javax.api", "org.jboss.logging", null, "org.apache.log4j"};
 
@@ -295,7 +295,8 @@ public class LoggingMigrator extends AbstractMigrator {
                     this.getClass(), moduleName, deps, fileJar, 
                     this.parseIfExistsParam("logger." + IfExists.PARAM_NAME, IfExists.OVERWRITE));
             actions.add(moduleAction);
-        }catch (CliScriptException e) {
+        }
+        catch( CliScriptException e ) {
             throw new MigrationException("Migration of the appeneder " + handler.getName() + " failed (CLI command): " + e.getMessage(), e);
         }
 
@@ -308,7 +309,7 @@ public class LoggingMigrator extends AbstractMigrator {
      *  Processes AppenderBean. Adds actions to context!
      *  TODO: Refactor to return the action.
      */
-    private List<IMigrationAction> createAppenderAction( AppenderBean appenderBean, HashMap<File, String> tempModules ) throws MigrationException {
+    private List<? extends IMigrationAction> createAppenderAction( AppenderBean appenderBean, HashMap<File, String> tempModules ) throws MigrationException {
         
         // Selection of classes which are stored in log4j or jboss logging jars.
         String cls = appenderBean.getAppenderClass();
@@ -351,7 +352,7 @@ public class LoggingMigrator extends AbstractMigrator {
                 }
             }
 
-            return (List) Collections.singletonList( action );
+            return Collections.singletonList( action );
         }
         catch (CliScriptException e) {
             throw new MigrationException("Migration of the appender " + appenderBean.getAppenderName() + " failed: " + e.getMessage(), e);
@@ -592,7 +593,7 @@ public class LoggingMigrator extends AbstractMigrator {
     
     /**
      * Not implemented yet. Not sure if it is necessary..
-     * Method for migrating File-Appender to Handler in AS7
+     * Migrates File-Appender to Handler in AS7
      *
      * @return migrated File-Handler object
      */
@@ -902,12 +903,12 @@ public class LoggingMigrator extends AbstractMigrator {
         if( (root.getRootLoggerHandlers() != null) || !(root.getRootLoggerHandlers().isEmpty())){
             StringBuilder handlerTemp = new StringBuilder();
             for(String handler : root.getRootLoggerHandlers()){
-                handlerTemp.append("\"" + handler + "\",");
+                handlerTemp.append('"').append(handler).append('"');
             }
 
             String temp = handlerTemp.toString();
             String handlers ="/subsystem=logging/root-logger=ROOT:write-attribute(name=handlers, value=[" +
-                    StringUtils.substringBeforeLast(temp, "," + "])");
+                    StringUtils.substringBeforeLast(temp, ",") + "])";
 
             ModelNode handlersNode = new ModelNode();
             handlersNode.get(ClientConstants.OP).set(ClientConstants.WRITE_ATTRIBUTE_OPERATION);
@@ -951,7 +952,7 @@ public class LoggingMigrator extends AbstractMigrator {
         CliAddScriptBuilder builder = new CliAddScriptBuilder();
         builder.addProperty("level", logger.getLoggerLevelName());
         builder.addProperty("use-parent-handlers", logger.getUseParentHandlers());
-        resultScript.append(builder.asString());
+        resultScript.append(builder.formatAndClearProps());
 
         if (logger.getHandlers() != null) {
             /*StringBuilder handlersBuilder = new StringBuilder();
@@ -1003,7 +1004,7 @@ public class LoggingMigrator extends AbstractMigrator {
         builder.addProperty("append", periodic.getAppend());
         // TODO: AS7CliUtils.copyProperties(handler, builder, "level formatter autoflush append");
 
-        resultScript.append(builder.asString()).append(")");
+        resultScript.append(builder.formatAndClearProps()).append(")");
 
         return resultScript.toString();
     }
@@ -1040,7 +1041,7 @@ public class LoggingMigrator extends AbstractMigrator {
         builder.addProperty("max-backup-index", sizeHandler.getMaxBackupIndex());
         // TODO: AS7CliUtils.copyProperties(handler, builder, "level filter formatter autoflush ...");
 
-        resultScript.append(builder.asString()).append(")");
+        resultScript.append(builder.formatAndClearProps()).append(")");
 
         return resultScript.toString();
     }
@@ -1072,7 +1073,7 @@ public class LoggingMigrator extends AbstractMigrator {
         builder.addProperty("overflow-action", asyncHandler.getOverflowAction());
         // TODO: AS7CliUtils.copyProperties(handler, builder, "level filter formatter ...");
 
-        resultScript.append(builder.asString());
+        resultScript.append(builder.formatAndClearProps());
 
         if (asyncHandler.getSubhandlers() != null) {
             StringBuilder handlersBuilder = new StringBuilder();
@@ -1116,7 +1117,7 @@ public class LoggingMigrator extends AbstractMigrator {
         builder.addProperty("target", consoleHandler.getTarget());
         // TODO: AS7CliUtils.copyProperties(handler, builder, "level filter formatter autoflush target");
 
-        resultScript.append(builder.asString()).append(")");
+        resultScript.append(builder.formatAndClearProps()).append(")");
 
         return resultScript.toString();
     }
@@ -1146,7 +1147,7 @@ public class LoggingMigrator extends AbstractMigrator {
         builder.addProperty("module", customHandler.getModule());
         // TODO: AS7CliUtils.copyProperties(handler, builder, "level filter formatter class module");
 
-        resultScript.append(builder.asString());
+        resultScript.append(builder.formatAndClearProps());
 
         if( customHandler.getProperties() != null && ! customHandler.getProperties().isEmpty() ) {
             StringBuilder propertiesBuilder = new StringBuilder();

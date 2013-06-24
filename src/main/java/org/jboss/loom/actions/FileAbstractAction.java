@@ -15,6 +15,7 @@ import java.io.IOException;
 import java.util.Objects;
 import org.apache.commons.io.FileUtils;
 import org.jboss.loom.spi.ann.Property;
+import org.jboss.loom.utils.Utils;
 
 /**
  *
@@ -64,6 +65,25 @@ public abstract class FileAbstractAction extends AbstractStatefulAction {
 
 
 
+    /**
+     * Copies the dest file, if it exists, to a temp file.
+     */
+    @Override
+    public void backup() throws MigrationException {
+        
+        if( ! this.dest.exists() ) return;
+        
+        try {
+            this.temp = File.createTempFile(this.dest.getName(), null);
+            FileUtils.deleteQuietly( this.temp );
+            Utils.copyFileOrDirectory(this.dest, this.temp);
+        } catch (IOException ex) {
+            throw new ActionException(this, "Creating a backup file failed: " + ex.getMessage(), ex);
+        }
+        setState(IMigrationAction.State.BACKED_UP);
+    }
+
+
     @Override
     public void rollback() throws MigrationException {
         if( ! this.isAfterPerform() )  return;
@@ -86,24 +106,6 @@ public abstract class FileAbstractAction extends AbstractStatefulAction {
     @Override
     public void postValidate() throws MigrationException {
         // Empty - JRE would give IOEx if something.
-    }
-
-
-    /**
-     * Copies the dest file, if it exists, to a temp file.
-     */
-    @Override
-    public void backup() throws MigrationException {
-        
-        if( ! this.dest.exists() ) return;
-        
-        try {
-            this.temp = File.createTempFile(this.dest.getName(), null);
-            FileUtils.copyFile(this.dest, this.temp);
-        } catch (IOException ex) {
-            throw new ActionException(this, "Creating a backup file failed: " + ex.getMessage(), ex);
-        }
-        setState(IMigrationAction.State.BACKED_UP);
     }
 
 

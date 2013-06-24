@@ -8,9 +8,8 @@
 package org.jboss.loom.utils.as7;
 
 import java.lang.reflect.InvocationTargetException;
-import org.apache.commons.lang.ObjectUtils;
+import java.util.Map;
 import org.apache.commons.lang.StringUtils;
-import org.apache.commons.lang.math.NumberUtils;
 import org.jboss.dmr.ModelNode;
 import org.jboss.loom.ex.MigrationException;
 
@@ -28,7 +27,7 @@ public class CliApiCommandBuilder {
     }
 
     /**
-     * Method for adding new property to ModelNode and checking if its value isn't empty or null
+     * adds new property to ModelNode and checks if its value isn't empty or null.
      *
      * @param property name of the property to set
      * @param value    value for setting
@@ -43,6 +42,12 @@ public class CliApiCommandBuilder {
         if( value == null || value.isEmpty() )
             value = default_;
         this.command.get(property).set(value);
+    }
+    
+    public void addPropertiesIfSet( Map<String, String> props ){
+        for( Map.Entry<String, String> entry : props.entrySet() ) {
+            addPropertyIfSet( entry.getKey(), entry.getValue() );
+        }
     }
 
     public ModelNode getCommand() {

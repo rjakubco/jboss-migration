@@ -12,7 +12,6 @@ import javax.xml.bind.annotation.XmlElementWrapper;
 import javax.xml.bind.annotation.XmlRootElement;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 import org.jboss.loom.tools.report.adapters.ToHashCodeAdapter;
-import org.jboss.loom.tools.report.adapters.ToHashCodeAdapterList;
 
 /**
  * Actions of which the migration consists.
@@ -27,7 +26,7 @@ import org.jboss.loom.tools.report.adapters.ToHashCodeAdapterList;
  * and ideally, at what place in the code (for exceptions).
  * 
  * It may contain warnings if some validation failed 
- * but doesn't prevent successful run (also see {@link IfExists}).
+ * but doesn't prevent successful run (also see {@link Configuration.IfExists}).
  * 
  * It keeps a reference to MigrationContext which is needed in perform().
  * 

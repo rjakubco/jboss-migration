@@ -7,11 +7,9 @@
  */
 package org.jboss.loom.utils.as7;
 
-import org.jboss.loom.utils.as7.CliApiCommandBuilder;
 import org.jboss.loom.ex.CliBatchException;
 import org.jboss.loom.conf.AS7Config;
 import org.jboss.loom.ex.MigrationException;
-import org.jboss.loom.utils.as7.BatchFailure;
 import org.jboss.as.controller.client.ModelControllerClient;
 import org.jboss.as.controller.client.OperationBuilder;
 import org.jboss.as.controller.client.helpers.ClientConstants;
@@ -23,8 +21,11 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Collection;
 import java.util.Set;
+import org.apache.commons.lang.StringEscapeUtils;
 import org.apache.commons.lang.StringUtils;
 import org.jboss.dmr.ModelType;
+import org.jboss.loom.conf.Configuration;
+import org.jboss.loom.spi.ann.Property;
 
 /**
  *
@@ -213,7 +214,7 @@ public class AS7CliUtils {
         String[] parts = StringUtils.split( props );
         for( String prop : parts ) {
             try {
-                Method method = source.getClass().getMethod( convertPropToMethodName(prop) );
+                Method method = source.getClass().getMethod( Property.Utils.convertPropToMethodName(prop) );
                 if( String.class != method.getReturnType() )
                     continue;
                 String val = (String) method.invoke(source);
@@ -225,14 +226,6 @@ public class AS7CliUtils {
         }
     }
     
-    private static String convertPropToMethodName( String propName ){
-        StringBuilder sb  = new StringBuilder("get");
-        String[] parts = StringUtils.split( propName, "-");
-        for( String part : parts) {
-            sb.append( StringUtils.capitalize( part ) );
-        }
-        return sb.toString();
-    }
     
     
     /**
@@ -255,6 +248,55 @@ public class AS7CliUtils {
     }
 
 
+    /**
+     *  Parse CLI command into a ModelNode - /foo=a/bar=b/:operation(param=value,...) .
+     * 
+     *  TODO: Support nested params.
+     */
+    public static ModelNode parseCommand( String command ) {
+        String[] parts = StringUtils.split( command, ':' );
+        if( parts.length < 2 )  throw new IllegalArgumentException("Missing CLI command operation: " + command);
+        String addr = parts[0];
+        
+        ModelNode query = new ModelNode();
+        
+        // Addr
+        String[] partsAddr = StringUtils.split( addr, '/' );
+        for( String segment : partsAddr ) {
+            String[] partsSegment = StringUtils.split( segment, "=", 2);
+            if( partsSegment.length != 2 )  throw new IllegalArgumentException("Wrong addr segment format - need '=': " + command);
+            query.get(ClientConstants.OP_ADDR).add( partsSegment[0], partsSegment[1] );
+        }
+        
+        // Op
+        String[] partsOp = StringUtils.split( parts[1], '(' );
+        String opName = partsOp[0];
+        query.get(ClientConstants.OP).set(opName);
+        
+        // Op args
+        if( partsOp.length > 1 ){
+            String args = StringUtils.removeEnd( partsOp[1], ")" );
+            for( String arg : args.split(",") ) {
+                String[] partsArg = arg.split("=", 2);
+                query.get(partsArg[0]).set( unquote( partsArg[1] ) );
+            }
+        }
+        return query;
+    }// parseCommand()
+    
+    
+    /**
+     *  Changes "foo\"bar" to foo"bar.
+     *  Is tolerant - doesn't check if the quotes are really present.
+     */
+    public static String unquote( String string ) {
+        string = StringUtils.removeStart( string, "\"" );
+        string = StringUtils.removeEnd( string, "\"" );
+        return StringEscapeUtils.unescapeJava( string );
+    }
+
+    
+    
     /**
      *   Formats Model node to the form of CLI script command - /foo=a/bar=b/:operation(param=value,...) .
      */
@@ -359,21 +401,44 @@ public class AS7CliUtils {
     
     /**
      *  Converts "some-property-name" to "getSomePropertyName()".
+     *  
+     *  @deprecated  Use @Property.Utils.convertPropToMethodName().
      */
     public static String formatGetterName(String prop){
-        StringBuilder sb = new StringBuilder("get");
-        //String[] parts = StringUtils.split( prop, "-_");
-        boolean capNext = true;
-        for( int i = 0; i < prop.length(); i++ ) {
-            char ch = prop.charAt(i);
-            if( Character.isLetter( ch )){
-                sb.append( capNext ? Character.toUpperCase( ch ) : ch );
-                capNext = false;
-            }
-            else 
-                capNext = true;
+        return Property.Utils.convertPropToMethodName( prop );
+    }
+
+
+    /**
+     *  Returns the name of JDBC driver which uses given module.
+     * 
+        /subsystem=datasources/:read-attribute(name=installed-drivers)
+        {
+            "outcome" => "success",
+            "result" => [{
+                "driver-name" => "h2",
+                "deployment-name" => undefined,
+                "driver-module-name" => "com.h2database.h2",
+                "module-slot" => "main",
+                "driver-datasource-class-name" => "",
+                "driver-xa-datasource-class-name" => "org.h2.jdbcx.JdbcDataSource",
+                "driver-class-name" => "org.h2.Driver",
+                "driver-major-version" => 1,
+                "driver-minor-version" => 3,
+                "jdbc-compliant" => true
+            }]
         }
-        return sb.toString();
+     */
+    public static String findJdbcDriverUsingModule( String driverModuleName, ModelControllerClient as7Client ) throws IOException {
+        
+        ModelNode query = parseCommand("/subsystem=datasources/:read-attribute(name=installed-drivers)");
+        ModelNode driversNode = as7Client.execute( query );
+        driversNode = driversNode.get("result");
+        for( ModelNode modelNode : driversNode.asList() ) {
+            if( modelNode.get("driver-module-name").asString().equals( driverModuleName ) )
+                return modelNode.get("driver-name").asString();
+        }
+        return null;
     }
         
 }// class

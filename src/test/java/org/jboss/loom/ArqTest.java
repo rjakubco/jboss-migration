@@ -4,16 +4,16 @@ import java.io.File;
 import java.io.IOException;
 import java.net.UnknownHostException;
 import org.apache.commons.io.FileUtils;
-import org.jboss.loom.conf.AS7Config;
-import org.jboss.loom.conf.Configuration;
-import org.jboss.loom.utils.as7.AS7CliUtils;
 import org.jboss.arquillian.container.test.api.RunAsClient;
 import org.jboss.arquillian.junit.Arquillian;
 import org.jboss.as.controller.client.ModelControllerClient;
 import org.jboss.loom.categories.AS;
 import org.jboss.loom.categories.EAP;
+import org.jboss.loom.conf.AS7Config;
+import org.jboss.loom.conf.Configuration;
 import org.jboss.loom.conf.ConfigurationValidator;
 import org.jboss.loom.ex.MigrationException;
+import org.jboss.loom.utils.as7.AS7CliUtils;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -26,6 +26,9 @@ import org.junit.runner.RunWith;
 @RunWith(Arquillian.class)
 public class ArqTest {
     
+    /**
+     *  Copies mgmt-users.properties with user admin/admin to configuration/ to allow using Web console.
+     */
     //@BeforeClass
     public static void copyMgmtUsersFile( AS7Config as7Config ) throws IOException {
         FileUtils.copyInputStreamToFile(

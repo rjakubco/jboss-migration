@@ -4,12 +4,19 @@ package org.jboss.loom.migrators._ext;
 import java.io.File;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import javax.validation.ConstraintViolation;
+import javax.validation.Validation;
+import javax.validation.Validator;
+import javax.validation.ValidatorFactory;
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlAnyAttribute;
 import javax.xml.bind.annotation.XmlAttribute;
 import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
+import org.jboss.loom.ex.MigrationException;
+import org.jboss.loom.migrators.Origin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -19,7 +26,7 @@ import org.slf4j.LoggerFactory;
  */
 @XmlRootElement( name="migrator" )
 @XmlAccessorType( XmlAccessType.NONE )
-public class MigratorDefinition extends ContainerOfStackableDefs {
+public class MigratorDefinition extends ContainerOfStackableDefs implements Origin.Wise {
     private static final Logger log = LoggerFactory.getLogger( MigratorDefinition.class );
     
     @XmlAttribute
@@ -39,12 +46,23 @@ public class MigratorDefinition extends ContainerOfStackableDefs {
     //@XmlElement(name = "action")
     //List<ActionDef> actions;
     
-    File fileOfOrigin;
+    //File fileOfOrigin;
+    // @XmlLocation wouldn't work if loaded through Node.
     
+    private Origin origin;
+    @Override public Origin getOrigin() { return origin; }
+    @Override public MigratorDefinition setOrigin( Origin origin ) { this.origin = origin; return this; }
+
+
+    @Override
+    public String toString() {
+        return "MigratorDefinition '"+ name +"' " + origin;
+    }
 
     
-    // === Subelement classes === //
     
+    
+    // === Subelement classes === //
     
     @XmlRootElement
     @XmlAccessorType( XmlAccessType.NONE )
@@ -78,23 +96,23 @@ public class MigratorDefinition extends ContainerOfStackableDefs {
     
     @XmlRootElement
     public static class XmlFileQueryDef extends FileQueryBase {
-        public Class jaxbBean;
-        public String xpath;
+        @XmlAttribute public Class jaxbBean;
+        @XmlAttribute public String xpath;
     }
 
     @XmlRootElement
     public static class PropFileQueryDef extends FileQueryBase {
-        public String propNameMask;
+        @XmlAttribute public String propNameMask;
     }
     
     
     private static class FileQueryBase extends QueryBase {
-        public String pathMask;     // Path mask of the files to load.
+        @XmlAttribute public String pathMask;     // Path mask of the files to load.
     }
     
     private static class QueryBase {
-        public String id;           // Id under which the result will be stored.
-        public String subjectLabel; // What's being loaded - for exceptions and logging.
+        @XmlAttribute public String id;           // Id under which the result will be stored.
+        @XmlAttribute public String subjectLabel; // What's being loaded - for exceptions and logging.
     }
     
 }// class

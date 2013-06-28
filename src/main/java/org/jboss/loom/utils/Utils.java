@@ -8,14 +8,6 @@
 package org.jboss.loom.utils;
 
 import groovy.lang.GroovyClassLoader;
-import org.jboss.loom.ex.CliScriptException;
-import org.jboss.loom.ex.CopyException;
-import org.apache.commons.io.FileUtils;
-import org.apache.commons.io.filefilter.FileFilterUtils;
-import org.apache.commons.io.filefilter.IOFileFilter;
-import org.apache.commons.io.filefilter.NameFileFilter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -32,10 +24,25 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
+import javax.validation.ConstraintViolation;
+import javax.validation.Validation;
+import javax.validation.Validator;
+import javax.validation.ValidatorFactory;
 import org.apache.commons.io.DirectoryWalker;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.filefilter.FileFilterUtils;
+import org.apache.commons.io.filefilter.IOFileFilter;
+import org.apache.commons.io.filefilter.NameFileFilter;
 import org.apache.commons.lang.StringUtils;
+import org.jboss.loom.ex.CliScriptException;
+import org.jboss.loom.ex.CopyException;
+import org.jboss.loom.ex.MigrationException;
+import org.jboss.loom.migrators.Origin;
+import org.jboss.loom.migrators._ext.MigratorDefinition;
 import org.jboss.loom.spi.IConfigFragment;
 import org.jboss.loom.tools.report.Reporter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Global utils class.
@@ -76,47 +83,6 @@ public class Utils {
         System.out.println("        <property> := Name of the property to set. Specific per module. " +
                 "May occur multiple times.");
         System.out.println();
-    }
-
-    
-    /**
-     *  TODO: Return a list of files.
-     */
-    public static File lookForJarWithClass( String className, File... dirs ) throws IOException {
-        for( File dir : dirs ) {
-            log.debug("    Looking in " +  dir.getPath() + " for a .jar with: " + className);
-
-            if( ! dir.isDirectory() ){
-                log.trace("    Not a directory: " +  dir.getPath());
-                continue;
-            }
-
-            Collection<File> jarFiles = FileUtils.listFiles(dir, new String[]{"jar"}, true);
-            log.trace("    Found .jar files: " + jarFiles.size());
-
-            String classFilePath = className.replace(".", "/");
-
-            for( File file : jarFiles ) {
-                // Search the contained files for those containing $classFilePath.
-                try( JarFile jarFile = new JarFile(file) ) {
-                    if( containsClass( jarFile, classFilePath ) )
-                        return file;
-                }
-            }
-        }
-        return null;
-    }// lookForJarWithClass()
-
-
-    
-    private static boolean containsClass( JarFile jarFile, String classFilePath ) {
-        final Enumeration<JarEntry> entries = jarFile.entries();
-        while( entries.hasMoreElements() ) {
-            final JarEntry entry = entries.nextElement();
-            if( ( ! entry.isDirectory() ) && entry.getName().contains( classFilePath ))
-                return true;
-        }
-        return false;
     }
     
 
@@ -297,15 +263,22 @@ public class Utils {
 
     
     
-    // ======= Class utils ====== //
-    
-    public static void copyResourceToDir( Class cls, String name, File dir ) throws IOException {
-        String packageDir =  cls.getPackage().getName().replace('.', '/');
-        String path =  "/" + packageDir + "/" + name;
-        InputStream is = GroovyClassLoader.class.getResourceAsStream( path );
-        if( is == null )
-            throw new IllegalArgumentException("Resource not found: " + packageDir);
-        FileUtils.copyInputStreamToFile( is, new File(dir, name) );
-    }
+    public static <T extends Object> void  validate( T object ) throws MigrationException {
+        ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
+        Validator validator = factory.getValidator();
+        Set<ConstraintViolation<T>> valRes = validator.validate( object );
+        if( ! valRes.isEmpty() ){
+            StringBuilder sb = new StringBuilder("Validation failed for: ");
+            if( object instanceof Origin.Wise )
+                sb.append( ((Origin.Wise)object).getOrigin() );
+            else
+                sb.append(object);
+            
+            for( ConstraintViolation<T> fail : valRes) {
+                sb.append("\n  ").append( fail.getMessage() );
+            }
+            throw new MigrationException( sb.toString() );
+        }
+    }// validate()
 
 }// class

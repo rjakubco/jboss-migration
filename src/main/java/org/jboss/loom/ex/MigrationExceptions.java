@@ -30,4 +30,21 @@ public class MigrationExceptions extends MigrationException {
         return exs;
     }
 
+    
+
+    /**
+     *  Shorthand method to handle one or multiple exceptions, if they occur, at the end of a method.
+     */
+    public static void wrapExceptions( List<Exception> problems, String msg ) throws MigrationException {
+        if( !problems.isEmpty() ) {
+            if( problems.size() == 1 ) {
+                Exception ex2 = problems.get( 0 );
+                throw new MigrationException( msg + ex2.getMessage(), ex2 );
+            } else {
+                throw new MigrationExceptions( msg, problems );
+            }
+        }
+    }
+
+    
 }// class

@@ -10,7 +10,6 @@ package org.jboss.loom.migrators.dataSources;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.filefilter.FileFilterUtils;
 import org.apache.commons.io.filefilter.SuffixFileFilter;
-import org.apache.commons.lang.StringUtils;
 import org.jboss.as.controller.client.helpers.ClientConstants;
 import org.jboss.dmr.ModelNode;
 import org.jboss.loom.utils.as7.CliAddScriptBuilder;
@@ -42,6 +41,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.*;
 import org.jboss.loom.spi.ann.ConfigPartDescriptor;
+import org.jboss.loom.utils.ClassUtils;
 import org.jboss.loom.utils.UtilsAS5;
 import org.jboss.loom.utils.XmlUtils;
 import org.jboss.loom.utils.as7.AS7CliUtils;
@@ -215,7 +215,7 @@ public class DatasourceMigrator extends AbstractMigrator {
         
         // Find out if the driver already exists in AS 7. If so, find which module and which configured JDBC driver it is.
         try {
-            File driverJarAS7 = Utils.lookForJarWithClass( driverClass, getGlobalConfig().getAS7Config().getModulesDir() );
+            File driverJarAS7 = ClassUtils.lookForJarWithClass( driverClass, getGlobalConfig().getAS7Config().getModulesDir() );
             // A .jar with driver class found.
             if( driverJarAS7 != null ){
                 log.info("Target server already contains JDBC driver '" + driverClass + "': " + driverJarAS7);
